@@ -17,7 +17,14 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
-__all__ = ["Summary", "summarize", "iqr", "percentile"]
+__all__ = [
+    "Summary",
+    "summarize",
+    "iqr",
+    "percentile",
+    "translational_residual",
+    "rotational_residual",
+]
 
 
 @dataclass(frozen=True)
@@ -77,3 +84,43 @@ def summarize(values) -> Summary:
         sd=float(np.std(v, ddof=1)) if v.size > 1 else 0.0,
         maximum=float(np.max(v)),
     )
+
+
+def translational_residual(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Euclidean distance between two stacks of poses, in millimetres.
+
+    ``a`` and ``b`` are ``(n, 4, 4)``. This is the paper's :math:`\\Delta d(t)`.
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape:
+        raise ValueError(f"shape mismatch: {a.shape} vs {b.shape}")
+    return np.linalg.norm(a[:, :3, 3] - b[:, :3, 3], axis=1)
+
+
+def rotational_residual(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Angle of the relative rotation between two stacks of poses, in degrees.
+
+    The paper's :math:`\\Delta\\varphi(t)`.
+
+    Computed as the magnitude of ``Rotation.from_matrix(Aᵀ B)``, which scipy
+    derives via the quaternion. That is deliberately *not* the
+    ``arccos((tr R - 1) / 2)`` form the paper writes: the two agree
+    analytically, but arccos of the trace loses precision near zero rotation --
+    its derivative diverges there -- and these residuals are a tenth of a degree.
+    The quaternion route is well conditioned across the whole range, and it is
+    what produced the published numbers.
+    """
+    from scipy.spatial.transform import Rotation
+
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape:
+        raise ValueError(f"shape mismatch: {a.shape} vs {b.shape}")
+
+    out = np.full(len(a), np.nan)
+    ok = ~(np.isnan(a).any(axis=(1, 2)) | np.isnan(b).any(axis=(1, 2)))
+    if ok.any():
+        relative = np.einsum("nji,njk->nik", a[ok, :3, :3], b[ok, :3, :3])
+        out[ok] = np.degrees(Rotation.from_matrix(relative).magnitude())
+    return out
