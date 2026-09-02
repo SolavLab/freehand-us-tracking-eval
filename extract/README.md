@@ -117,6 +117,46 @@ python extract/convert/realsense_bag_to_rosbag2.py \
     "$VIPOSE_RAW_ROOT/pivot/test2.bag" -o /path/to/pivot_converted
 ```
 
+### The IMU playback race — read this before re-converting
+
+**On this machine today, conversion does not reliably reproduce the bags the
+published results were built from, and the failure used to be silent.**
+
+The two playback pipelines are opened over the same file concurrently. That is
+what keeps the IMU at its native rate, and it is also timing dependent. Measured
+on the pivot recording:
+
+| | images/side | IMU | implied IMU rate |
+|---|---|---|---|
+| reference bag (April 2026) | 1677 | 22262 | 398 Hz — correct |
+| original converter, today | 1677 | 1942 | 35 Hz |
+| this converter, today | 1677 | 1635 | 29 Hz |
+
+The camera stream is fine and reproduces exactly. The IMU is not: it comes back
+at roughly the *camera* rate, which is precisely the throttling the two-pipeline
+design exists to avoid. The original code and this port fail the same way, so
+this is a librealsense or environment change rather than a regression in the
+port — and the reference bags themselves are correct, so nothing in the paper is
+affected.
+
+What was silent: the driver script checked only that the output files existed.
+A bag holding a tenth of its inertial data was therefore reported as a
+successful conversion, and would have gone on to starve the visual-inertial SLAM
+with no indication anything was wrong.
+
+`_validate_output()` now checks the written bag's actual image and IMU rates
+against the recording's span and **raises** if either falls below half the
+expected rate. Re-converting today fails with:
+
+```
+Error: the converted bag does not contain the expected streams:
+  - IMU at 29.3 Hz over 55.9 s, expected about 400 Hz (1635 written).
+```
+
+which is the correct outcome. If you need to regenerate these bags, expect to
+investigate the playback race first; pinning `pyrealsense2` to the version that
+produced the reference bags is the obvious first thing to try.
+
 ## Device calibration is baked in
 
 The launch files carry **this rig's measured** extrinsics: the ZED stereo
