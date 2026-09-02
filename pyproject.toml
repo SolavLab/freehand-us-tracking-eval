@@ -59,6 +59,10 @@ addopts = "-ra"
 
 [tool.ruff]
 src = ["src", "tests"]
+# tests/tools/ holds the Phase-0 provenance harness, preserved as it was run.
+# Reformatting it would make the shipped copy differ from what produced the
+# golden master, which is the one thing those files exist to attest.
+extend-exclude = ["tests/tools"]
 target-version = "py310"
 line-length = 100
 
