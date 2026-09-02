@@ -1,130 +1,127 @@
-"""Run the full evaluation: synchronization, hand-eye calibration, residuals.
+"""Run the full evaluation and write a result store.
 
-One process per recording. That is not a stylistic choice: the legacy evaluator
-creates a matplotlib figure on every calibration and never closes it, and stage
-3 performs roughly a hundred calibrations per recording, so a single process
-evaluating all four passes 2 GB within minutes and exhausts memory before
-finishing. Per-recording processes cap the peak near 4 GB and reclaim it in
-between.
-
-Splitting this way does not change the results. Unification is within a
-recording -- the shared evaluation window is computed across the three pipelines
-of one recording, never across recordings -- and the published artifacts are
-themselves timestamped in two groups, so the run that produced the paper's
-numbers was already split by recording.
+One process per recording, driven by :func:`evaluate_all`. The native engine
+does not leak memory, so this is now only for isolation and parallelism rather
+than a necessity -- but it also means one recording failing does not lose the
+others, and each recording's full log is kept beside its results.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import subprocess
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
-from ._bridge import convert_cell, stage_inputs
+from .io.mocap import load_mocap
+from .io.tracks import load_track
 from .metrics import summarize
+from .pipeline import evaluate_recording
 from .recordings import Cell, Dataset
 from .results import cell_dir, write_calibration, write_residuals
 
-__all__ = ["evaluate_recording", "evaluate_all", "run_id"]
+__all__ = ["evaluate_recording_to_store", "evaluate_all", "run_id"]
+
+log = logging.getLogger(__name__)
 
 
 def run_id(dataset: Dataset) -> str:
-    """A directory name that identifies this run: UTC timestamp plus versions."""
-    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%MZ")
-    return f"{stamp}-{dataset.id}"
+    """A directory name identifying this run: UTC timestamp and dataset id."""
+    return f"{datetime.now(timezone.utc):%Y-%m-%dT%H%MZ}-{dataset.id}"
 
 
-def evaluate_recording(
-    dataset: Dataset, recording: str, out_root: str | Path, *, verbose: bool = True
+def evaluate_recording_to_store(
+    dataset: Dataset, recording: str, out_root: str | Path
 ) -> list[Cell]:
-    """Evaluate all pipelines of one recording, in this process.
-
-    Writes ``<out_root>/cells/<pipeline>/<recording>/`` and
-    ``<out_root>/recordings/<recording>/window.json``.
-    """
-    # Importing the legacy package mutates matplotlib and Qt global state, so it
-    # is imported here rather than at module scope: a caller that only wants
-    # `run_id` should not acquire a matplotlib backend as a side effect.
-    os.environ.setdefault("MPLBACKEND", "Agg")
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    from ._legacy import plot_path_unified as legacy  # noqa: F401  (side-effecting import)
-
+    """Evaluate one recording and write it into the store."""
     out_root = Path(out_root)
-    with tempfile.TemporaryDirectory(prefix=f"vipose-{recording}-") as tmp:
-        results_dir, data_dir = stage_inputs(dataset, recording, tmp)
-        config = legacy.PipelineConfig(results_dir, data_dir)
-        pipeline_nums = [_pipeline_num(dataset, p) for p in dataset.pipelines]
+    tracks = {
+        p: load_track(dataset.tracking_csv(Cell(p, recording))) for p in dataset.pipelines
+    }
+    reference = load_mocap(
+        dataset.reference_csv(recording),
+        marker_prefix=dataset.marker_prefix,
+        expected_rate_hz=dataset.vicon_rate_hz,
+        expected_markers=len(dataset.marker_order),
+    )
 
-        legacy.process_test_unified_calibration(
-            config,
-            int(dataset.manifest["recordings"][recording]["legacy_test"]),
-            pipelines=pipeline_nums,
-            verbose=verbose,
+    results = evaluate_recording(dataset, recording, tracks, reference)
+
+    windows = {}
+    for pipeline, result in results.items():
+        d = cell_dir(out_root, result.cell)
+        write_residuals(d / "residuals.csv", result.residuals)
+        write_calibration(
+            d / "calibration.json",
+            {
+                "T_camera_to_marker": result.calibration.T_camera_to_marker,
+                "T_slamworld_to_vicon": result.calibration.T_slamworld_to_vicon,
+                "T_vicon_to_slamworld": result.calibration.T_vicon_to_slamworld,
+                "T_camera_to_marker_intrinsic": result.marker.express(
+                    result.calibration.T_camera_to_marker
+                ),
+                "marker_centroid": result.marker.centroid,
+                "marker_x_axis": result.marker.x_axis,
+                "marker_y_axis": result.marker.y_axis,
+                "marker_z_axis": result.marker.z_axis,
+                "camera_to_marker_distance_mm": result.calibration.camera_to_marker_distance_mm,
+                "temporal_offset_ms": result.temporal_offset_ms,
+                "offset_refinement_stages": result.stages,
+                "vicon_window_ms": list(result.vicon_window_ms),
+                "local_window_ms": list(result.local_window_ms),
+                "n_frames_used": result.calibration.n_frames_used,
+                "provenance": {"vipose_version": __version__, "dataset": dataset.id},
+            },
         )
-
-        written = []
-        windows = {}
-        for pipeline in dataset.pipelines:
-            cell = Cell(pipeline, recording)
-            residuals, calibration = convert_cell(dataset, cell, results_dir)
-            calibration["provenance"] = {
-                "vipose_version": __version__,
-                "dataset": dataset.id,
-                "engine": "vipose._legacy (verbatim original)",
-            }
-            d = cell_dir(out_root, cell)
-            write_residuals(d / "residuals.csv", residuals)
-            write_calibration(d / "calibration.json", calibration)
-
-            t, a = summarize(residuals.d_trans_mm), summarize(residuals.d_rot_deg)
-            (d / "cell.json").write_text(
-                json.dumps(
-                    {
-                        "pipeline": pipeline,
-                        "recording": recording,
-                        "frames": len(residuals),
-                        "duration_s": residuals.duration_s,
-                        "temporal_offset_ms": calibration["temporal_offset_ms"],
-                        "translational_mm": t.as_dict(),
-                        "rotational_deg": a.as_dict(),
-                    },
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n"
-            )
-            windows[pipeline] = {
-                "vicon_window_ms": calibration["vicon_window_ms"],
-                "local_window_ms": calibration["local_window_ms"],
-                "temporal_offset_ms": calibration["temporal_offset_ms"],
-                "offset_refinement_stages": calibration["offset_refinement_stages"],
-            }
-            written.append(cell)
-
-        # The shared window must be identical across pipelines; that is the
-        # fairness property unified mode provides, so it is checked, not assumed.
-        shared = [w["vicon_window_ms"] for w in windows.values()]
-        if any(w != shared[0] for w in shared):
-            raise RuntimeError(
-                f"{recording}: pipelines disagree on the shared Vicon window: {shared}"
-            )
-        rec_dir = out_root / "recordings" / recording
-        rec_dir.mkdir(parents=True, exist_ok=True)
-        (rec_dir / "window.json").write_text(
+        t = summarize(result.residuals.d_trans_mm)
+        a = summarize(result.residuals.d_rot_deg)
+        ref = result.reference_residual_mm
+        (d / "cell.json").write_text(
             json.dumps(
-                {"recording": recording, "vicon_window_ms": shared[0], "pipelines": windows},
-                indent=2,
-                sort_keys=True,
+                {
+                    "pipeline": pipeline,
+                    "recording": recording,
+                    "frames": len(result.residuals),
+                    "duration_s": result.residuals.duration_s,
+                    "temporal_offset_ms": result.temporal_offset_ms,
+                    "translational_mm": t.as_dict(),
+                    "rotational_deg": a.as_dict(),
+                    "reference_fit_mm": summarize(ref[~_isnan(ref)]).as_dict(),
+                },
+                indent=2, sort_keys=True,
             )
             + "\n"
         )
-    return written
+        windows[pipeline] = {
+            "temporal_offset_ms": result.temporal_offset_ms,
+            "local_window_ms": list(result.local_window_ms),
+            "offset_refinement_stages": result.stages,
+        }
+
+    shared = {tuple(r.vicon_window_ms) for r in results.values()}
+    if len(shared) != 1:
+        raise RuntimeError(
+            f"{recording}: pipelines disagree on the shared Vicon window: {shared}"
+        )
+    rec_dir = out_root / "recordings" / recording
+    rec_dir.mkdir(parents=True, exist_ok=True)
+    (rec_dir / "window.json").write_text(
+        json.dumps(
+            {
+                "recording": recording,
+                "vicon_window_ms": list(shared.pop()),
+                "pipelines": windows,
+            },
+            indent=2, sort_keys=True,
+        )
+        + "\n"
+    )
+    return [r.cell for r in results.values()]
 
 
 def evaluate_all(
@@ -132,17 +129,16 @@ def evaluate_all(
     out_root: str | Path,
     *,
     recordings: list[str] | None = None,
-    verbose: bool = True,
 ) -> Path:
-    """Evaluate every recording, one subprocess each. Returns ``out_root``."""
+    """Evaluate every recording, one subprocess each."""
     out_root = Path(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
     todo = recordings or dataset.recordings()
 
     for i, recording in enumerate(todo, 1):
         print(f"[{i}/{len(todo)}] {recording}", flush=True)
-        log = out_root / f"{recording}.log"
-        with open(log, "w") as fh:
+        logfile = out_root / f"{recording}.log"
+        with open(logfile, "w") as fh:
             proc = subprocess.run(
                 [
                     sys.executable, "-m", "vipose.evaluate",
@@ -150,12 +146,11 @@ def evaluate_all(
                     "--out", str(out_root),
                     "--recording", recording,
                 ],
-                stdout=fh, stderr=subprocess.STDOUT,
-                env=_worker_env(),
+                stdout=fh, stderr=subprocess.STDOUT, env=_worker_env(),
             )
         if proc.returncode != 0:
-            raise RuntimeError(f"{recording} failed with exit {proc.returncode}; see {log}")
-        print(f"        done -> {out_root / 'cells'} (log: {log.name})", flush=True)
+            raise RuntimeError(f"{recording} failed with exit {proc.returncode}; see {logfile}")
+        print(f"        done ({logfile.name})", flush=True)
 
     _write_run_metadata(dataset, out_root, todo)
     return out_root
@@ -164,18 +159,11 @@ def evaluate_all(
 def _worker_env() -> dict[str, str]:
     """Environment for a worker process.
 
-    ``DISPLAY`` and ``WAYLAND_DISPLAY`` are removed, not just overridden.
-    Importing the legacy calibration module calls ``matplotlib.use("TkAgg")``
-    whenever a display is present, which silently defeats ``MPLBACKEND=Agg`` --
-    verified: the backend really is TkAgg after that import on a desktop
-    session. An interactive backend in a batch run is slower, can open windows,
-    and fails outright in CI, so the display is hidden from the worker instead.
-
-    Thread counts are pinned to one so results do not depend on how a BLAS
-    library happens to decompose an SVD. The hand-eye calibration and the Kabsch
-    fit are both SVD-based.
+    BLAS thread counts are pinned to one so results do not depend on how a
+    library happens to decompose an SVD; both the hand-eye calibration and the
+    rigid-body fit are SVD-based.
     """
-    env = {k: v for k, v in os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+    env = dict(os.environ)
     env.update(
         PYTHONDONTWRITEBYTECODE="1",
         MPLBACKEND="Agg",
@@ -199,7 +187,6 @@ def _write_run_metadata(dataset: Dataset, out_root: Path, recordings: list[str])
                 "# Provenance for this evaluation run.",
                 f"vipose_version: {__version__}",
                 f"dataset: {dataset.id}",
-                "engine: vipose._legacy (verbatim original code)",
                 f"recordings: [{', '.join(recordings)}]",
                 f"pipelines: [{', '.join(dataset.pipelines)}]",
                 "environment:",
@@ -214,10 +201,10 @@ def _write_run_metadata(dataset: Dataset, out_root: Path, recordings: list[str])
     )
 
 
-def _pipeline_num(dataset: Dataset, pipeline: str) -> int:
-    from ._bridge import LEGACY_PIPELINE_NUM
+def _isnan(a):
+    import numpy as np
 
-    return LEGACY_PIPELINE_NUM[pipeline]
+    return np.isnan(a)
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -230,8 +217,9 @@ def _main(argv: list[str] | None = None) -> int:
     p.add_argument("--recording", required=True)
     args = p.parse_args(argv)
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ds = Dataset.load(args.dataset, verify_hashes=False)
-    cells = evaluate_recording(ds, args.recording, args.out)
+    cells = evaluate_recording_to_store(ds, args.recording, args.out)
     print(f"wrote {len(cells)} cells for {args.recording}")
     return 0
 

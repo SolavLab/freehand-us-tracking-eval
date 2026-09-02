@@ -85,7 +85,29 @@ class MarkerFrame:
     z_axis: np.ndarray
 
     def rotation(self) -> np.ndarray:
+        """``(3, 3)`` whose columns are the axes, mapping this frame to Vicon."""
         return np.column_stack([self.x_axis, self.y_axis, self.z_axis])
+
+    def from_vicon(self) -> np.ndarray:
+        """``(4, 4)`` rotating Vicon-frame quantities into this frame.
+
+        Rotation only, no translation: the marker-intrinsic frame is used to
+        express *orientations* comparably across recordings, and giving it the
+        cluster centroid as an origin would make the result depend on where the
+        cluster happened to be in the room.
+        """
+        out = np.eye(4)
+        out[:3, :3] = self.rotation().T
+        return out
+
+    def express(self, transform: np.ndarray) -> np.ndarray:
+        """Re-express a Vicon-frame transform in the marker-intrinsic frame.
+
+        Applied to the camera-to-marker transform this gives the quantity that
+        should be constant across recordings, since it no longer depends on the
+        arbitrary reference frame the rigid-body fit is anchored to.
+        """
+        return self.from_vicon() @ np.asarray(transform, dtype=float)
 
 
 def solve_hand_eye(

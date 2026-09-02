@@ -94,17 +94,34 @@ reports (0.05–0.94 mm, 0.019–0.037°).
 `docs/setup.md` covers the four environments R3 requires, and why they cannot be
 combined.
 
-## Implementation status
+## Implementation
 
-The evaluation currently runs on the original code, preserved byte-identically
-in `src/vipose/_legacy/` and driven through a compatibility bridge. It is being
-absorbed into `vipose` proper module by module — reference I/O, geometry,
-synchronization, calibration, metrics — with the golden master gating each step.
-`src/vipose/_legacy/__init__.py` documents what that code does that the
-replacement does not, and `docs/` records what was found along the way.
+`src/vipose/` is a complete reimplementation — about 2,200 lines across twenty
+modules, replacing roughly 4,700 lines of the original four. Each module was
+ported against the code it replaced and checked elementwise before the original
+was removed, and the resulting pipeline reproduces the published per-frame
+residuals to 1.4e-08 mm and 2.5e-09 degrees. `docs/porting-notes.md` records
+what changed and what was deliberately preserved.
 
-The parts already replaced are the dataset layer, the result store, summary
-statistics and table generation.
+```
+recordings.py    the dataset manifest; Dataset and Cell
+io/mocap.py      Vicon Nexus export -> MocapData
+io/tracks.py     pose CSV -> Track, schema-validated
+geometry/        SE(3) helpers, and the Kabsch marker-cluster fit
+kinematics.py    rotational increments and geodesic angular speed
+sync/            stages 1 and 2, reference resampling
+calibration.py   robot-world/hand-eye (Shah), marker-intrinsic frame
+metrics.py       residuals and summary statistics -- pure, no plotting
+pipeline.py      orchestration, including stage 3 and the fixed-point loop
+report/          tables
+evaluate.py      result-store writer and the per-recording driver
+cli.py           the `vipose` command
+```
+
+Nothing outside `report/` imports pyplot. In the original, the residual values
+were returned *by* the plotting functions, so results could not be computed
+without drawing figures — which is why a matplotlib error could destroy a
+twelve-cell run and why the figures leaked until the process ran out of memory.
 
 ## Licence
 
