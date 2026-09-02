@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Evaluation of visual-inertial pose-tracking pipelines against a motion-capture reference, for freehand 3D-ultrasound probe localization"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
-# license = { file = "LICENSE" }   # pending: see docs/licensing.md
+license = { file = "LICENSE" }
 authors = [
     { name = "Zohar Oddes" },
     { name = "Dana Solav" },
@@ -56,6 +56,13 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+# vipose._legacy is preserved byte-identically, so its warnings cannot be fixed
+# without breaking that identity. They are its own: invalid escape sequences in
+# matplotlib label strings, and zip() without strict=.
+filterwarnings = [
+    "ignore:invalid escape sequence:DeprecationWarning",
+    "ignore:.*tight_layout.*:UserWarning",
+]
 
 [tool.ruff]
 src = ["src", "tests"]

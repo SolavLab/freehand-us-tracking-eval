@@ -1,14 +1,13 @@
 # Licensing and attribution
 
-## Open decision: this repository has no licence yet
+## Licence
 
-**A licence must be chosen before publication.** Without one, the default is
-"all rights reserved", which prevents the reuse that publishing the code is
-meant to enable. MIT or BSD-3-Clause is conventional for a research artifact of
-this kind and is compatible with everything listed below.
+**MIT**, see `LICENSE`. Copyright 2026 Zohar Oddes and Dana Solav, Faculty of
+Mechanical Engineering, Technion -- Israel Institute of Technology.
 
-Once chosen: add `LICENSE` at the repository root and re-enable the `license`
-field in `pyproject.toml` (currently commented out with a pointer to this file).
+MIT is compatible with everything listed below: the upstream projects this work
+builds on are Apache-2.0 (NVIDIA Isaac ROS) and permissive (Stereolabs), and
+none of their source is redistributed here in any case.
 
 ## Third-party code is not redistributed
 
@@ -55,9 +54,9 @@ image.
 ## Data
 
 The Vicon reference trajectories and the pipeline pose CSVs under `datasets/`
-were produced by the authors and are covered by whichever licence this
-repository adopts; a permissive data licence such as CC-BY-4.0 is worth
-considering for them specifically.
+were produced by the authors and are covered by the MIT licence above. If the
+raw archive is deposited separately, CC-BY-4.0 is worth considering for the data
+specifically, since MIT is written for software.
 
 The raw recordings (~20 GiB, see
 `datasets/probe-tracking-2025-10-23/raw.yaml`) are not in this repository and

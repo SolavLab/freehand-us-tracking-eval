@@ -108,9 +108,9 @@ statistics and table generation.
 
 ## Licence
 
-**Not yet chosen** — see `docs/licensing.md`, which also explains why no
-third-party source is redistributed and what needs attention before publication.
+MIT, see [`LICENSE`](LICENSE). `docs/licensing.md` explains why no
+third-party source is redistributed, and what still needs attention before publication.
 
 ## Citation
 
-`CITATION.cff` — pending the licence decision and a DOI for the raw archive.
+`CITATION.cff` — pending a DOI for the raw archive.
