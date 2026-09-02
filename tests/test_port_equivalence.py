@@ -139,3 +139,129 @@ def test_unknown_marker_prefix_is_an_error():
             marker_prefix="NOT_A_SUBJECT:",
             expected_rate_hz=DATASET.vicon_rate_hz,
         )
+
+
+# --------------------------------------------------------------------------
+# vipose.io.tracks, vipose.geometry.transforms, vipose.kinematics
+# --------------------------------------------------------------------------
+
+from vipose.geometry import transforms  # noqa: E402
+from vipose.io.tracks import load_track  # noqa: E402
+from vipose.kinematics import angular_speed, rotational_increments  # noqa: E402
+from vipose.recordings import Cell  # noqa: E402
+
+CELLS = DATASET.cells()
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_load_track_matches_legacy(cell, legacy):
+    """Pose columns and the derived relative clock are identical."""
+    path = DATASET.tracking_csv(cell)
+    new = load_track(path)
+    old = legacy.get_df_ZED(str(path))
+
+    assert len(new) == len(old)
+    np.testing.assert_array_equal(new.frame, old["Frame"].to_numpy())
+    np.testing.assert_array_equal(new.time_ms, old["Time_ms"].to_numpy())
+    for i, axis in enumerate("XYZ"):
+        np.testing.assert_array_equal(
+            new.translation[:, i], old[f"Translation_{axis}"].to_numpy()
+        )
+        np.testing.assert_array_equal(new.rotvec[:, i], old[f"Rotation_{axis}"].to_numpy())
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_transform_roundtrip_matches_legacy(cell, legacy):
+    """to_matrices/from_matrices agree with df_to_T/T_to_df."""
+    path = DATASET.tracking_csv(cell)
+    new = load_track(path)
+    old = legacy.get_df_ZED(str(path))
+
+    mats_new = transforms.to_matrices(new.translation, new.rotvec)
+    mats_old = np.stack(legacy.df_to_T(old))
+    np.testing.assert_allclose(mats_new, mats_old, rtol=0, atol=0)
+
+    # and back again
+    t, rv = transforms.from_matrices(mats_new)
+    df_old = legacy.T_to_df(list(mats_old))
+    np.testing.assert_allclose(t[:, 0], df_old["Translation_X"].to_numpy(), rtol=0, atol=0)
+    np.testing.assert_allclose(rv[:, 2], df_old["Rotation_Z"].to_numpy(), rtol=0, atol=1e-12)
+
+    rot, trans = transforms.split_rt(mats_new)
+    t_old, r_old = legacy.split_rt(list(mats_old))
+    np.testing.assert_array_equal(trans, np.stack(t_old))
+    np.testing.assert_array_equal(rot, np.stack(r_old))
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_angular_speed_matches_legacy(cell, legacy):
+    """The synchronization objective's input series is identical.
+
+    This one matters most of the three: stages 1 and 2 align on exactly this
+    signal, and its minimum is shallow -- several near-equal troughs about 12 ms
+    apart -- so any difference here could move a published temporal offset.
+    """
+    path = DATASET.tracking_csv(cell)
+    new = load_track(path)
+    old = legacy.get_df_ZED(str(path))
+
+    t_new, w_new = angular_speed(new.time_ms, new.rotvec)
+    t_old, w_old = legacy.angular_speed_magnitude_from_rotvec(old)
+
+    np.testing.assert_array_equal(t_new, t_old)
+    np.testing.assert_allclose(w_new, w_old, rtol=0, atol=0)
+
+    inc_new = rotational_increments(new.rotvec)
+    inc_old = legacy.rotational_increments_from_rotvec(old)
+    np.testing.assert_allclose(inc_new, inc_old, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("recording", RECORDINGS)
+def test_rigid_body_angular_speed_matches_legacy(recording, legacy):
+    """Same, on the reference side, where the fit feeds the objective."""
+    new_rb = fit_rigid_body(_load_new(recording), min_markers=4)
+    old_mocap = legacy.load_mocap(str(DATASET.reference_csv(recording)))
+    df, _ = legacy.calculate_vicon_rigid_body(old_mocap, min_markers=4, print_stats=False)
+
+    t_new, w_new = angular_speed(new_rb.time_ms, new_rb.rotvec)
+    t_old, w_old = legacy.angular_speed_magnitude_from_rotvec(df)
+    np.testing.assert_array_equal(t_new, t_old)
+    np.testing.assert_allclose(w_new, w_old, rtol=0, atol=0)
+
+
+def test_angular_speed_units_are_rad_per_millisecond():
+    """A constant 1 rad/s about one axis, sampled in milliseconds.
+
+    Pins the unit, because the original's comment said radians per second while
+    the arithmetic divided by an interval in milliseconds.
+    """
+    t = np.arange(0.0, 1000.0, 10.0)                    # ms
+    rotvec = np.zeros((len(t), 3))
+    rotvec[:, 2] = t / 1000.0                            # 1 rad after 1000 ms
+    _, omega = angular_speed(t, rotvec)
+    np.testing.assert_allclose(omega, 1e-3, rtol=1e-9)
+
+
+def test_pose_continuity_reproduces_the_papers_method():
+    """Window-independent continuity counts match the manuscript.
+
+    The paper reports, within the evaluation windows, zero repeated poses for
+    ZED-cuVSLAM and 40 for RS-cuVSLAM. Both are window-independent here -- every
+    RS repetition falls inside its window -- so they must reproduce exactly on
+    the full tracks.
+    """
+    counts = {}
+    for pipeline in DATASET.pipelines:
+        repeated = omitted = 0
+        for recording in RECORDINGS:
+            track = load_track(DATASET.tracking_csv(Cell(pipeline, recording)))
+            repeated += len(track.repeated_poses())
+            omitted += track.omitted_frames()
+        counts[pipeline] = (repeated, omitted)
+
+    assert counts["zed-cuvslam"][0] == 0, "the paper reports no repeated poses for ZED-cuVSLAM"
+    assert counts["rs-cuvslam"][0] == 40, "the paper reports 40 repeated poses for RS-cuVSLAM"
+    assert counts["rs-cuvslam"][1] == 0, "the paper reports no omissions for RS-cuVSLAM"
+    # Counts over the full track can only exceed the in-window counts.
+    assert counts["zed-sdk"][0] >= 54
+    assert counts["zed-cuvslam"][1] >= 192
