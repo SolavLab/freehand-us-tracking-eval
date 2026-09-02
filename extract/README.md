@@ -64,7 +64,46 @@ original driver script computed an area-file path and then never passed it.
 
 ## Pipelines II and III — cuVSLAM
 
-Three phases, all inside the container (`../environments/isaac_ros/`):
+```bash
+# once
+cd environments/isaac_ros
+vcs import ../../src < repos.yaml && ./apply-patches.sh && ./run-container.sh
+./build-workspace.sh
+
+# per recording, from the host
+extract/cuvslam/run_zed_svo2.sh      pivot /workspaces/isaac_ros-dev/test2.svo2
+extract/cuvslam/run_realsense_bag.sh pivot /workspaces/isaac_ros-dev/test2_converted
+```
+
+### Verified end to end
+
+Pipeline II was run from this repository against the pivot recording: the
+release's launch file, its `monitor_svo_end.py`, its `export_poses.py` and its
+`tracks_to_common_csv.py`, in the Isaac ROS container. cuVSLAM initialised,
+the SVO2 played to its end, the end-of-file monitor caught `SvoStatus` and
+retrieved the optimised trajectory, and the result converted cleanly to the
+common schema — 3280 poses over 55.2 s.
+
+Feeding that regenerated trajectory back through the evaluation:
+
+| | frames | median Δd | median Δφ |
+|---|---|---|---|
+| published | 3253 | 2.63 mm | 0.100° |
+| **re-run** | **3275** | **2.65 mm** | **0.108°** |
+
+So a completely independent re-run moves the reported median by **0.02 mm and
+0.008°** — below the 0.28 mm the Vicon reference contributes, and below the
+trial-to-trial variability the paper reports for this pipeline (0.48 mm,
+0.022°). In the same evaluation the other two pipelines, reading the shipped
+CSVs, re-derived their published values exactly, which is what confirms the
+difference comes from the regenerated trajectory and not from the harness.
+
+Per-pose, the two cuVSLAM runs differ by a median of 3.4 mm and 0.118°, and only
+0.4 % of poses are bit-identical. That is the honest scale of cuVSLAM's
+non-determinism; most of it is absorbed by re-estimating the hand–eye
+calibration, which is why the *reported* figures move so little.
+
+### The three phases, in detail
 
 1. **Play back and track.** `launch/isaac_ros_visual_slam_zed_svo2.launch.py`
    for the ZED SVO2 path, `..._rosbag.launch.py` for the converted RealSense
