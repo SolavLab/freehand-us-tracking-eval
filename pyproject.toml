@@ -59,10 +59,15 @@ addopts = "-ra"
 
 [tool.ruff]
 src = ["src", "tests"]
-# tests/tools/ holds the Phase-0 provenance harness, preserved as it was run.
-# Reformatting it would make the shipped copy differ from what produced the
-# golden master, which is the one thing those files exist to attest.
-extend-exclude = ["tests/tools"]
+# Both excluded directories hold code that is deliberately preserved verbatim.
+#
+# src/vipose/_legacy/ is the original evaluation code, byte-identical to the
+# version that produced the published results -- that identity is what makes the
+# golden master meaningful, so it must not be reformatted. It is being replaced
+# module by module and will be deleted.
+#
+# tests/tools/ is the Phase-0 provenance harness, preserved as it was run.
+extend-exclude = ["src/vipose/_legacy", "tests/tools"]
 target-version = "py310"
 line-length = 100
 

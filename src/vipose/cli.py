@@ -1,11 +1,13 @@
 """Command line interface.
 
-    vipose verify   check the dataset matches its manifest and the golden master
-                    is self-consistent
-    vipose tables   regenerate the manuscript's tables from a result store
+    vipose verify     check the dataset matches its manifest and the golden
+                      master is self-consistent
+    vipose evaluate   run synchronization, calibration and residuals from the
+                      shipped pose and mocap CSVs
+    vipose tables     regenerate the manuscript's tables from a result store
 
-Later commits add ``evaluate`` (the full synchronization and calibration) and
-``figures``. This is the only module permitted to configure matplotlib.
+Later commits add ``figures``. This is the only module permitted to configure
+matplotlib.
 """
 
 from __future__ import annotations
@@ -77,6 +79,19 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_evaluate(args: argparse.Namespace) -> int:
+    from .evaluate import evaluate_all, run_id
+
+    ds = Dataset.load(args.dataset, verify_hashes=not args.no_hashes)
+    out = Path(args.out) if args.out else Path("results") / run_id(ds)
+    recordings = args.recordings.split(",") if args.recordings else None
+    print(f"evaluating {ds.id} -> {out}")
+    evaluate_all(ds, out, recordings=recordings)
+    print(f"\nresults in {out}")
+    print(f"next: vipose tables --store {out}")
+    return 0
+
+
 def _cmd_tables(args: argparse.Namespace) -> int:
     ds = Dataset.load(args.dataset, verify_hashes=False)
     table = write_residuals_table(ds, args.store, args.out)
@@ -102,6 +117,15 @@ def main(argv: list[str] | None = None) -> int:
         "--no-hashes", action="store_true", help="skip sha256 verification (faster)"
     )
     v.set_defaults(func=_cmd_verify)
+
+    e = sub.add_parser("evaluate", help="run the full evaluation")
+    e.add_argument("--out", default=None, help="output directory (default: results/<run-id>)")
+    e.add_argument(
+        "--recordings", default=None,
+        help="comma-separated recording ids (default: all published)",
+    )
+    e.add_argument("--no-hashes", action="store_true")
+    e.set_defaults(func=_cmd_evaluate)
 
     t = sub.add_parser("tables", help="regenerate the manuscript's tables")
     t.add_argument("--store", default=DEFAULT_GOLDEN, help="result store or golden master")
