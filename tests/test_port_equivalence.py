@@ -10,6 +10,8 @@ They import ``vipose._legacy`` and will be deleted along with it.
 
 from __future__ import annotations
 
+import functools
+import json
 import os
 from pathlib import Path
 
@@ -41,6 +43,7 @@ def legacy():
     return sn
 
 
+@functools.cache
 def _load_new(recording):
     return load_mocap(
         DATASET.reference_csv(recording),
@@ -265,3 +268,202 @@ def test_pose_continuity_reproduces_the_papers_method():
     # Counts over the full track can only exceed the in-window counts.
     assert counts["zed-sdk"][0] >= 54
     assert counts["zed-cuvslam"][1] >= 192
+
+
+# --------------------------------------------------------------------------
+# vipose.sync
+# --------------------------------------------------------------------------
+
+from vipose.sync.resample import resample_reference, shared_window  # noqa: E402
+from vipose.sync.stages import (  # noqa: E402
+    crosscorrelation_offset,
+    omega_mismatch_rms,
+    refine_offset_omega,
+)
+
+# Stage 1 and 2 offsets recorded in the published metadata_unified.json files,
+# taken from the paper's run rather than from this code.
+PUBLISHED_STAGES_MS = {
+    ("zed-sdk", "pivot"): (-1216.9607695300306, -1209.5298968807706),
+    ("zed-cuvslam", "pivot"): (-2289.9798086565406, -2271.948481395),
+    ("rs-cuvslam", "pivot"): (-2287.2256130736, -2290.1720695),
+}
+
+
+@functools.cache
+def _sync_inputs(cell):
+    """Cached: the rigid-body fit is ~14k per-frame SVDs per recording."""
+    track = load_track(DATASET.tracking_csv(cell))
+    mocap = _load_new(cell.recording)
+    rb = fit_rigid_body(mocap, min_markers=4)
+    return track, mocap, rb
+
+
+@functools.cache
+def _legacy_sync_inputs_cached(cell):
+    import contextlib
+    import io
+
+    from vipose._legacy import SynchronizationNew as sn
+
+    old_track = sn.get_df_ZED(str(DATASET.tracking_csv(cell)))
+    old_mocap = sn.load_mocap(str(DATASET.reference_csv(cell.recording)))
+    with contextlib.redirect_stdout(io.StringIO()):
+        old_rb, _ = sn.calculate_vicon_rigid_body(old_mocap, min_markers=4, print_stats=False)
+    return old_track, old_mocap, old_rb
+
+
+def _legacy_sync_inputs(cell, legacy):
+    # The legacy resampler mutates the mocap object it is given, so hand out a
+    # fresh copy of that one while still caching the expensive fit.
+    old_track, old_mocap, old_rb = _legacy_sync_inputs_cached(cell)
+    fresh_mocap = legacy.load_mocap(str(DATASET.reference_csv(cell.recording)))
+    return old_track, fresh_mocap, old_rb
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_stage1_offset_matches_legacy(cell, legacy):
+    import contextlib
+    import io
+
+    track, _, rb = _sync_inputs(cell)
+    new = crosscorrelation_offset(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec)
+
+    old_track, _, old_rb = _legacy_sync_inputs(cell, legacy)
+    with contextlib.redirect_stdout(io.StringIO()):
+        old = legacy.estimate_temporal_offset_zed_vicon(old_track, old_rb, 0.0)
+    assert new == old, f"{cell}: stage 1 {new} vs legacy {old}"
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_stage2_objective_matches_legacy(cell, legacy):
+    """The objective itself, on a grid, not just its argmin.
+
+    Comparing minima would hide a difference in objective shape, and the shape
+    is what matters: the minimum is shallow, with several near-equal troughs
+    spanning about 12 ms, so an optimiser can move between them under a
+    perturbation far smaller than the difference in reported offset.
+    """
+    track, _, rb = _sync_inputs(cell)
+    old_track, _, old_rb = _legacy_sync_inputs(cell, legacy)
+
+    centre = crosscorrelation_offset(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec)
+    for delta in (-20.0, -8.0, -2.0, 0.0, 2.0, 8.0, 20.0):
+        offset = centre + delta
+        new = omega_mismatch_rms(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec, offset)
+        old = legacy.synchronize_zed_vicon_trial(old_track, old_rb, offset, discard_fraction=0.0)
+        assert new == old, f"{cell}: objective at {offset:+.1f} ms is {new} vs legacy {old}"
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_stage2_refined_offset_matches_legacy(cell, legacy):
+    from scipy.optimize import fmin
+
+    track, _, rb = _sync_inputs(cell)
+    start = crosscorrelation_offset(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec)
+    new = refine_offset_omega(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec, start)
+
+    old_track, _, old_rb = _legacy_sync_inputs(cell, legacy)
+    old = float(
+        fmin(
+            lambda x: legacy.synchronize_zed_vicon_trial(
+                old_track, old_rb, x, discard_fraction=0.0
+            ),
+            start,
+            maxiter=20,
+            xtol=1e-5,
+            disp=False,
+        )[0]
+    )
+    assert new == old, f"{cell}: stage 2 {new} vs legacy {old}"
+
+
+@pytest.mark.parametrize("key", sorted(PUBLISHED_STAGES_MS), ids=lambda k: f"{k[0]}-{k[1]}")
+def test_stages_reproduce_the_published_offsets(key):
+    """Stages 1 and 2 land on the values recorded in the paper's own run."""
+    cell = Cell(*key)
+    expected_stage1, expected_stage2 = PUBLISHED_STAGES_MS[key]
+    track, _, rb = _sync_inputs(cell)
+
+    stage1 = crosscorrelation_offset(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec)
+    assert stage1 == pytest.approx(expected_stage1, abs=1e-6)
+    stage2 = refine_offset_omega(track.time_ms, track.rotvec, rb.time_ms, rb.rotvec, stage1)
+    assert stage2 == pytest.approx(expected_stage2, abs=1e-6)
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_resample_reference_matches_legacy(cell, legacy):
+    """Marker resampling is linear, and identical to the original.
+
+    Appendix A states the marker trajectories were resampled by cubic spline.
+    They were not: the original uses np.interp here, and the only cubic
+    interpolation in that implementation is in the stage-2 angular-speed
+    objective. This test pins the behaviour that produced the published numbers.
+    """
+    # Use this cell's published offset and evaluation window -- the real
+    # configuration. An arbitrary offset can push the camera timestamps outside
+    # the reference span, where the original silently clamped via np.interp and
+    # this port raises instead; comparing there would compare a bug to its fix.
+    golden = json.loads(
+        (ROOT / "tests" / "golden" / cell.pipeline / cell.recording
+         / "calibration.json").read_text()
+    )
+    offset = golden["temporal_offset_ms"]
+    lo, hi = golden["local_window_ms"]
+
+    track, mocap, rb = _sync_inputs(cell)
+    cropped = track.cropped(lo, hi)
+    new = resample_reference(mocap, cropped.time_ms, offset)
+
+    old_track, old_mocap, old_rb = _legacy_sync_inputs(cell, legacy)
+    old_cropped = old_track[
+        (old_track["Time_ms"] >= lo) & (old_track["Time_ms"] <= hi)
+    ].reset_index(drop=True)
+    old = legacy.synchronize_zed_vicon(old_cropped, old_rb, old_mocap, offset)
+
+    assert len(new) == len(old.Frame) == len(cropped)
+    np.testing.assert_allclose(new.time_ms, old.Time_ms, rtol=0, atol=0)
+    np.testing.assert_allclose(new.frame, old.Frame, rtol=0, atol=0)
+    for i, marker in enumerate(new.markers):
+        np.testing.assert_allclose(marker.X, old.Marker[i].X, rtol=0, atol=0)
+        np.testing.assert_allclose(marker.Y, old.Marker[i].Y, rtol=0, atol=0)
+        np.testing.assert_allclose(marker.Z, old.Marker[i].Z, rtol=0, atol=0)
+
+
+def test_resample_refuses_to_extrapolate():
+    """np.interp clamps silently; this must not."""
+    mocap = _load_new(RECORDINGS[0])
+    with pytest.raises(ValueError, match="outside the reference span"):
+        resample_reference(mocap, np.array([mocap.time_ms[-1] + 5000.0]), 0.0)
+
+
+def test_shared_window_intersects():
+    assert shared_window({"a": (0.0, 10.0), "b": (2.0, 8.0), "c": (1.0, 9.0)}) == (2.0, 8.0)
+    with pytest.raises(ValueError, match="no common window"):
+        shared_window({"a": (0.0, 1.0), "b": (5.0, 6.0)})
+
+
+@pytest.mark.parametrize("cell", CELLS, ids=str)
+def test_cropping_a_track_preserves_its_clock_origin(cell):
+    """The relative clock must stay anchored to the uncropped first sample.
+
+    Found while porting: with the origin recomputed from the current first
+    sample, cropping re-zeroed the clock and shifted every timestamp earlier --
+    by 67 ms for zed-cuvslam/pivot, four frames. Since the evaluation window is
+    expressed in this clock, that would have silently mis-placed the window and
+    resampled the reference at the wrong instants.
+    """
+    track = load_track(DATASET.tracking_csv(cell))
+    lo = float(track.time_ms[len(track) // 4])
+    hi = float(track.time_ms[len(track) // 2])
+
+    cropped = track.cropped(lo, hi)
+    assert cropped.origin_ms == track.origin_ms
+    assert cropped.time_ms[0] >= lo
+    assert cropped.time_ms[-1] <= hi
+    # the surviving samples keep the times they had before cropping
+    keep = (track.time_ms >= lo) & (track.time_ms <= hi)
+    np.testing.assert_array_equal(cropped.time_ms, track.time_ms[keep])
+    np.testing.assert_array_equal(cropped.timestamp_ms, track.timestamp_ms[keep])
+    # and cropping does not disturb the original
+    assert len(track) > len(cropped)

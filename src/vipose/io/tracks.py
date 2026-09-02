@@ -39,14 +39,22 @@ class Track:
     translation: np.ndarray  # (n, 3) millimetres
     rotvec: np.ndarray       # (n, 3) radians, axis-angle
     state: pd.DataFrame      # diagnostic columns, kept as-is
+    origin_ms: int           # timestamp the relative clock is measured from
 
     def __len__(self) -> int:
         return int(self.frame.size)
 
     @property
     def time_ms(self) -> np.ndarray:
-        """Milliseconds from this track's first sample."""
-        return self.timestamp_ms - self.timestamp_ms[0]
+        """Milliseconds from the **uncropped** track's first sample.
+
+        The origin is stored rather than recomputed, so cropping does not move
+        it. That matters: the evaluation window is expressed in this clock, so a
+        cropped track whose clock restarted at zero would place every sample
+        earlier than it belongs -- by 67 ms for one of the published cells, which
+        is four frames.
+        """
+        return self.timestamp_ms - self.origin_ms
 
     def cropped(self, t_min_ms: float, t_max_ms: float) -> Track:
         """A copy restricted to a window in *relative* time. Never mutates."""
@@ -63,7 +71,7 @@ class Track:
             translation=self.translation[keep],
             rotvec=self.rotvec[keep],
             state=self.state.loc[keep].reset_index(drop=True),
-        )
+        )  # origin_ms is carried over unchanged by replace()
 
     def repeated_poses(self) -> np.ndarray:
         """Indices where all six pose components equal the previous row.
@@ -120,4 +128,5 @@ def load_track(path: str | Path) -> Track:
         translation=df[["Translation_X", "Translation_Y", "Translation_Z"]].to_numpy(float),
         rotvec=df[["Rotation_X", "Rotation_Y", "Rotation_Z"]].to_numpy(float),
         state=df[diagnostics].reset_index(drop=True),
+        origin_ms=int(timestamp[0]),
     )
