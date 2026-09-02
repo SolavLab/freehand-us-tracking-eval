@@ -1,0 +1,91 @@
+# Raw recordings — NOT shipped in this repository.
+#
+# These are the source recordings from which everything under tracking/ was
+# derived.  They total ~16 GiB for the four published recordings (~20 GiB
+# including the excluded one) and belong in an archival deposit, not in git.
+#
+# Only the extraction stage (extract/) reads them.  The evaluation package never
+# needs them: every table and figure in the paper is reproducible from the CSVs
+# that DO ship.  Paths below are resolved against $VIPOSE_RAW_ROOT, which should
+# point at a directory laid out as <root>/<recording>/<file>.
+#
+# The .area files are ZED spatial-memory maps.  They are listed for completeness
+# but are NOT used: the pipeline-1 extractor enables area memory and builds it
+# fresh from each recording, and never loads a prebuilt map.  (The original
+# driver script computed an area-file path and then did not pass it.)
+
+root_env: VIPOSE_RAW_ROOT
+sha256: pending          # to be filled in when the archive is deposited
+recordings:
+  pivot:
+    legacy_test: 2
+    recorded: 2025-10-23
+    svo2:
+      file: test2.svo2
+      bytes: 733333875
+      note: ZED X Mini stereo + IMU, native SVO2 (pipelines I and II)
+    realsense_bag:
+      file: test2.bag
+      bytes: 3480862862
+      note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
+    area_map:
+      file: test2.area
+      bytes: 22405
+      note: ZED spatial-memory map — present but unused
+  mixed:
+    legacy_test: 3
+    recorded: 2025-10-23
+    svo2:
+      file: test3.svo2
+      bytes: 873433314
+      note: ZED X Mini stereo + IMU, native SVO2 (pipelines I and II)
+    realsense_bag:
+      file: test3.bag
+      bytes: 4088871112
+      note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
+    area_map: absent      # not recorded for this session
+  freehand:
+    legacy_test: 5
+    recorded: 2025-10-23
+    svo2:
+      file: test5.svo2
+      bytes: 729320985
+      note: ZED X Mini stereo + IMU, native SVO2 (pipelines I and II)
+    realsense_bag:
+      file: test5.bag
+      bytes: 3227685724
+      note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
+    area_map:
+      file: test5.area
+      bytes: 22405
+      note: ZED spatial-memory map — present but unused
+  pivot-repeat:
+    legacy_test: 1
+    recorded: 2025-10-23
+    svo2:
+      file: test1.svo2
+      bytes: 817759420
+      note: ZED X Mini stereo + IMU, native SVO2 (pipelines I and II)
+    realsense_bag:
+      file: test1.bag
+      bytes: 4071221742
+      note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
+    area_map:
+      file: test1.area
+      bytes: 22405
+      note: ZED spatial-memory map — present but unused
+  pivot-b:
+    legacy_test: 4
+    recorded: 2025-10-23
+    svo2:
+      file: test4.svo2
+      bytes: 597869310
+      note: ZED X Mini stereo + IMU, native SVO2 (pipelines I and II)
+    realsense_bag:
+      file: test4.bag
+      bytes: 3320815658
+      note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
+    area_map:
+      file: test4.area
+      bytes: 22405
+      note: ZED spatial-memory map — present but unused

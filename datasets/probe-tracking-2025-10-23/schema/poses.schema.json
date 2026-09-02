@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ZoharOddes/us-tracking-release/schema/poses.schema.json",
+  "title": "Common pose-trajectory CSV",
+  "description": "The single interchange format all three tracking pipelines are normalised to. One row per frame for which the pipeline reported a pose. This is the contract between the extraction stage (which runs under different interpreters, and in one case inside a container) and the evaluation package: extraction writes it, evaluation validates it on load, so a change in an extractor surfaces as a load-time error rather than as a silently different number.",
+  "x-format": {
+    "encoding": "utf-8",
+    "line_terminator": "\\n",
+    "delimiter": ",",
+    "header": "required, exactly the columns below, in this order"
+  },
+  "type": "object",
+  "required": ["columns"],
+  "properties": {
+    "columns": {
+      "type": "array",
+      "description": "Column order is significant; readers may address by name but writers must emit this order.",
+      "items": [
+        {
+          "name": "Frame",
+          "type": "integer",
+          "description": "Zero-based index of the row within this file. Note this is NOT a reliable frame identifier for the cuVSLAM pipelines: cuVSLAM renumbers its output sequentially, so an input frame it dropped leaves no gap here. Omitted frames must be counted from Timestamp, as round(dt / median(dt)) - 1."
+        },
+        {
+          "name": "Timestamp",
+          "type": "integer",
+          "unit": "milliseconds",
+          "description": "Acquisition-platform clock, inherited from the recording. Integer milliseconds since the Unix epoch. This is the authoritative time base for the whole analysis."
+        },
+        {
+          "name": "Translation_X",
+          "type": "number",
+          "unit": "millimetres",
+          "description": "Camera position in the SLAM world frame W, which is initialised at the camera pose when tracking begins."
+        },
+        {"name": "Translation_Y", "type": "number", "unit": "millimetres"},
+        {"name": "Translation_Z", "type": "number", "unit": "millimetres"},
+        {
+          "name": "Rotation_X",
+          "type": "number",
+          "unit": "radians",
+          "description": "Camera orientation as a ROTATION VECTOR (axis-angle), not Euler angles. Read with scipy Rotation.from_rotvec. Misreading these three columns as Euler angles produces an orientation-dependent gain error of up to 20 percent on every rotational metric, which is a defect this project has actually suffered."
+        },
+        {"name": "Rotation_Y", "type": "number", "unit": "radians"},
+        {"name": "Rotation_Z", "type": "number", "unit": "radians"},
+        {
+          "name": "Pose_Confidence",
+          "type": ["integer", "null"],
+          "description": "ZED SDK pose confidence, 0-100. Empty for the cuVSLAM pipelines, which report no equivalent."
+        },
+        {
+          "name": "Tracking_State",
+          "type": ["string", "null"],
+          "enum": ["OK", "SEARCHING", "OFF", "FPS_TOO_LOW", "SEARCHING_FLOOR_PLANE", "UNAVAILABLE", null],
+          "description": "ZED SDK positional-tracking state. Empty for the cuVSLAM pipelines."
+        },
+        {
+          "name": "Spatial_Memory",
+          "type": ["string", "null"],
+          "description": "ZED SDK spatial-memory state (INITIALIZING, SEARCHING, OK, MAP_UPDATE, KNOWN_MAP, ...). The cuVSLAM pipelines write the literal string 'cuVSLAM' here as a provenance marker; this is how a reader tells the two families apart from the data alone."
+        },
+        {
+          "name": "Odometry",
+          "type": ["string", "null"],
+          "description": "ZED SDK odometry status. Empty for the cuVSLAM pipelines."
+        },
+        {
+          "name": "Tracking_Fusion",
+          "type": ["string", "null"],
+          "description": "ZED SDK fusion mode (VISUAL, INERTIAL, ...). Empty for the cuVSLAM pipelines."
+        }
+      ]
+    }
+  },
+  "x-frames": {
+    "world": "SLAM world frame W, initialised independently per recording at the camera pose when tracking begins.",
+    "camera_by_pipeline": {
+      "zed-sdk": "left optical sensor, in the ZED SDK right-handed Y-up convention",
+      "zed-cuvslam": "the configured base frame (base_link), ROS convention",
+      "rs-cuvslam": "the configured base frame (camera_link), ROS convention"
+    },
+    "note": "These differ by constant rigid transformations, which the robot-world/hand-eye calibration absorbs. They therefore do not affect the reported residuals."
+  },
+  "x-known-variations": {
+    "line_endings": "Three of the four rs-cuvslam files as originally produced used CRLF while the fourth used LF; pandas tolerates both, so no published number was affected. The release normalises all files to LF.",
+    "number_formatting": "The pivot-repeat trajectories were regenerated later and write integral values as '0' where the others write '0.0'. Numerically identical."
+  }
+}

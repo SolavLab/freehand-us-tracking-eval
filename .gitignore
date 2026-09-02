@@ -1,0 +1,48 @@
+# Generated outputs. Every run writes into a fresh results/<run-id>/ directory,
+# so nothing here is ever needed in version control; `vipose evaluate` rebuilds
+# it from datasets/ in minutes.
+/results/
+/figures/
+/tables/
+
+# Raw recordings (~20 GiB). Catalogued in
+# datasets/probe-tracking-2025-10-23/raw.yaml and resolved at runtime from
+# $VIPOSE_RAW_ROOT. Never commit these.
+*.svo2
+*.svo
+*.area
+*.bag
+*.db3
+*.db3.zstd
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ROS 2 colcon
+/install/
+/log/
+/build/
+
+# Editor and desktop cruft. The source trees this release was extracted from
+# tracked several of these; they carry machine-specific paths and window
+# geometry and have no place in a published artifact.
+.vscode/
+*.code-workspace
+.idea/
+imgui.ini
+.DS_Store
+*.swp
+.~lock.*#
+
+# Logs
+*.log

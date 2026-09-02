@@ -1,0 +1,124 @@
+# Dataset manifest for the freehand-US probe-tracking comparison.
+#
+# This file is the single source of truth: recordings and pipelines are addressed
+# by the symbolic ids below, never by filename patterns. `legacy_test` and
+# `legacy_dir` record the identifiers used in the original analysis trees, so
+# results published before this release remain traceable.
+id: probe-tracking-2025-10-23
+session_date: 2025-10-23
+
+vicon:
+  # Authoritative sample rate. The Vicon Nexus export states it on line 4 of the
+  # CSV; the loader asserts the two agree rather than trusting either alone.
+  nominal_rate_hz: 240.0
+  marker_prefix: "ZED:"
+  marker_order: [top, back_left, back_right, front_right, front_left]
+  nexus_version: "2.16"
+
+recordings:
+  pivot:
+    label: 'Pivot'
+    legacy_test: 2
+    condition: pivot
+    published: true
+    duration_s: 55.1        # shared evaluation window, paper Table 2
+  mixed:
+    label: 'Mixed'
+    legacy_test: 3
+    condition: mixed
+    published: true
+    duration_s: 59.7        # shared evaluation window, paper Table 2
+  freehand:
+    label: 'Freehand'
+    legacy_test: 5
+    condition: freehand
+    published: true
+    duration_s: 46.9        # shared evaluation window, paper Table 2
+  pivot-repeat:
+    label: 'Pivot (repeat)'
+    legacy_test: 1
+    condition: pivot
+    published: true
+    duration_s: 37.4        # shared evaluation window, paper Table 2
+    repeat_of: pivot
+    note: >-
+      Second acquisition of the pivot condition, used to assess
+      trial-to-trial repeatability. Not an additional motion condition.
+
+excluded:
+  pivot-b:
+    legacy_test: 4
+    condition: pivot
+    published: false
+    exclusion: >-
+      Vicon marker-cluster rigid-body fit residual was mean 0.497 mm
+      (SD 0.338, max 3.800) within the shared evaluation window, against
+      0.209-0.279 mm for the four retained recordings. Not shipped; the
+      raw recording is listed in raw.yaml.
+
+pipelines:
+  zed-sdk:
+    label: 'ZED SDK'
+    legacy_dir: pipeline1_zed_sdk
+    reported_frame: left_optical_sensor
+  zed-cuvslam:
+    label: 'ZED + cuVSLAM'
+    legacy_dir: pipeline2_isaac_svo2
+    reported_frame: configured_base_frame
+    playback_rate: 0.4   # fraction of real time, to limit frame loss
+  rs-cuvslam:
+    label: 'RS + cuVSLAM'
+    legacy_dir: pipeline3_isaac_realsense
+    reported_frame: configured_base_frame
+    playback_rate: 0.4   # fraction of real time, to limit frame loss
+
+# sha256 and data-row counts of every shipped file, verified by Dataset.load().
+files:
+  reference/pivot/mocap.csv:
+    sha256: df4a37ce22c014536b4329b2cd5957c8325e02e45fc609c76f141134118fa73e
+    rows: 14236
+  reference/mixed/mocap.csv:
+    sha256: 52e9ab3a78b617a0b3ee9ad90701aae7f63494ebc7001d6e8497c3b65fdfb9de
+    rows: 16932
+  reference/freehand/mocap.csv:
+    sha256: 5ede0816be893ea846f22c5fdd10e9dc8ecea2ea8387f3412a2224dbfb2173cd
+    rows: 14613
+  reference/pivot-repeat/mocap.csv:
+    sha256: cc7447f972049f60990dfef8d54b76ed060c67a7a6b8abbe0a8a30659c92409a
+    rows: 14792
+  tracking/zed-sdk/pivot/poses.csv:
+    sha256: f4eac055b9b32db27fbd9807769f4d8860f4b87a7769852e81012d760d9fef18
+    rows: 3369
+  tracking/zed-sdk/mixed/poses.csv:
+    sha256: 0db37bfe43e65b7b4da4a75694259940d67b372ed17f493cb8ba8a9d5091257f
+    rows: 3950
+  tracking/zed-sdk/freehand/poses.csv:
+    sha256: d156fa17a1e35555c25528248733ec2b74246fc7c8ab021cec6630a23a65de50
+    rows: 3123
+  tracking/zed-sdk/pivot-repeat/poses.csv:
+    sha256: 72f2ebae79707bc9f7ab95a4a995c8c3ea6f6e43189d6a8f43088e7e15fc19be
+    rows: 3927
+  tracking/zed-cuvslam/pivot/poses.csv:
+    sha256: 0c68e8d98d53377c53fd1ff15c241915322530b687c4bf5044614990c527cb1f
+    rows: 3255
+  tracking/zed-cuvslam/mixed/poses.csv:
+    sha256: c777229c7b894a27bbc96092962227e2adf1b330c21c9edeb9186f3d4288da0e
+    rows: 3821
+  tracking/zed-cuvslam/freehand/poses.csv:
+    sha256: ac3b9ac3f9173a67be8c87ad9e2c83c0d47a20de2523d736a28a1e8c49910fd9
+    rows: 3000
+  tracking/zed-cuvslam/pivot-repeat/poses.csv:
+    sha256: 8a5494f25599e135cb612368c434060990642d294c4941af05c862959d37f1b7
+    rows: 3825
+  tracking/rs-cuvslam/pivot/poses.csv:
+    sha256: 8a3a2e00527fbf2f67676bc8cf87eb688f8bd02a38c91825db67e2083999e0be
+    rows: 1653
+  tracking/rs-cuvslam/mixed/poses.csv:
+    sha256: 541f419b581e9d710c665e0418e2cc9ac2a9303917ee0185b726d3bf0bf8b473
+    rows: 1795
+  tracking/rs-cuvslam/freehand/poses.csv:
+    sha256: a03a93c6390b2b4fe9fca05c80234555542ad44e68815402714eb7a3b5a31130
+    rows: 1409
+  tracking/rs-cuvslam/pivot-repeat/poses.csv:
+    sha256: 5f94674878b6b13991c4657aebfbcde1fe32c3440aa707944e1d624253417d23
+    rows: 1122
