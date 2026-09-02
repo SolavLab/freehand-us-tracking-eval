@@ -1,0 +1,21 @@
+# Entrypoint-additions layer for the Isaac ROS development image.
+#
+# Authored for this project; see the repository LICENSE. It adds nothing of
+# NVIDIA's -- it layers onto an NVIDIA base image, which is governed by NVIDIA's
+# own terms, and installs one locally-written entrypoint script.
+#
+# (An earlier copy of this file carried NVIDIA's proprietary copyright header,
+# pasted from a template. The header did not describe this file's contents and
+# has been removed.)
+#
+# The default value for BASE_IMAGE works around Docker's InvalidDefaultArgInFrom
+# error when a build argument is used in FROM without a default:
+# https://forums.developer.nvidia.com/t/question-on-run-dev-sh-and-invaliddefaultarginfrom-default-value-for-arg-base-image-results-in-empty-or-invalid-base-image-name-line-2/317127
+
+ARG BASE_IMAGE=ubuntu:22.04
+FROM ${BASE_IMAGE}
+
+# Scripts placed in entrypoint_additions/ are sourced by the image entrypoint,
+# in filename order, after the base environment is set up.
+COPY 01_my_setup.user.sh /usr/local/bin/scripts/entrypoint_additions/01_my_setup.user.sh
+RUN chmod +x /usr/local/bin/scripts/entrypoint_additions/01_my_setup.user.sh

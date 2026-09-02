@@ -1,0 +1,98 @@
+diff --git a/docker/Dockerfile.realsense b/docker/Dockerfile.realsense
+index 2c91710..9c8a5f7 100644
+--- a/docker/Dockerfile.realsense
++++ b/docker/Dockerfile.realsense
+@@ -15,6 +15,21 @@ ARG LIBREALSENSE_SOURCE_VERSION=v2.55.1
+ ARG REALSENSE_ROS_GIT_URL=https://github.com/NVIDIA-ISAAC-ROS/realsense-ros.git
+ ARG REALSENSE_ROS_VERSION=release/4.51.1-isaac
+ 
++# --- Isaac ROS APT repo (release-3.0) and keyring  <<<< this block from chatgpt to sort apt and apt-get issues---
++ENV DEBIAN_FRONTEND=noninteractive
++RUN set -eux; \
++    mkdir -p /usr/share/keyrings; \
++    curl -fsSL https://isaac.download.nvidia.com/isaac-ros/repos.key \
++      | gpg --dearmor -o /usr/share/keyrings/nvidia-isaac-ros.gpg; \
++    echo "deb [signed-by=/usr/share/keyrings/nvidia-isaac-ros.gpg] https://isaac.download.nvidia.com/isaac-ros/release-3 jammy release-3.0" \
++      > /etc/apt/sources.list.d/nvidia-isaac-ros.list; \
++    sed -i '/isaac-ros/d' /etc/apt/sources.list || true; \
++    # Allow repo Release-info changes (Origin/Label/Suite) non-interactively
++    printf 'Acquire::AllowReleaseInfoChange::Origin "true";\nAcquire::AllowReleaseInfoChange::Label "true";\nAcquire::AllowReleaseInfoChange::Suite "true";\n' \
++      > /etc/apt/apt.conf.d/allow-releaseinfo-change; \
++    apt-get -o Acquire::Retries=5 update
++
++
+ COPY scripts/build-librealsense.sh /opt/realsense/build-librealsense.sh
+ COPY scripts/install-realsense-dependencies.sh /opt/realsense/install-realsense-dependencies.sh
+ 
+diff --git a/docker/scripts/install-zed-x86_64.sh b/docker/scripts/install-zed-x86_64.sh
+index 3644511..6059255 100644
+--- a/docker/scripts/install-zed-x86_64.sh
++++ b/docker/scripts/install-zed-x86_64.sh
+@@ -1,15 +1,4 @@
+-# Based on https://github.com/stereolabs/zed-docker
+-
+-# Extract ubuntu release year from /etc/lsb-release
+-# Expects "/etc/lsb-release" to contain a line similar to "DISTRIB_RELEASE=20.04"
+-export UBUNTU_RELEASE_YEAR="$(grep -o -P 'DISTRIB_RELEASE=.{0,2}' /etc/lsb-release | cut -d= -f2)"
+-export ZED_SDK_MAJOR=4 ZED_SDK_MINOR=2
+-
+-# Extract cuda major and minor version from nvcc --version
+-# Expects "nvcc --version" to contain a line similar to "release 11.8"
+-export CUDA_MAJOR="$(nvcc --version | grep -o -P ' release .{0,4}' | cut -d. -f1 | cut -d ' ' -f3)"
+-export CUDA_MINOR="$(nvcc --version | grep -o -P ' release .{0,4}' | cut -d. -f2)"
+-
++#!/bin/bash
+ 
+ # Download dependencies for zed SDK installation RUN file
+ sudo apt-get update -y || true
+@@ -17,16 +6,43 @@ sudo apt-get install --no-install-recommends lsb-release wget less udev sudo zst
+ 
+ # Download zed SDK installation RUN file to /tmp directory
+ cd /tmp
+-wget -q -O ZED_SDK_Linux_Ubuntu${UBUNTU_RELEASE_YEAR}.run https://download.stereolabs.com/zedsdk/${ZED_SDK_MAJOR}.${ZED_SDK_MINOR}/cu${CUDA_MAJOR}/ubuntu${UBUNTU_RELEASE_YEAR}
+-chmod +x ZED_SDK_Linux_Ubuntu${UBUNTU_RELEASE_YEAR}.run ; sudo -u admin ./ZED_SDK_Linux_Ubuntu${UBUNTU_RELEASE_YEAR}.run -- silent skip_od_module skip_python skip_cuda
++URL=https://download.stereolabs.com/zedsdk/5.1/cu12/ubuntu22
++wget -q --no-check-certificate -O ZED_SDK_Linux.run ${URL}
++SIZE=$(du -sb './ZED_SDK_Linux.run' | awk '{ print $1 }')
++if ((SIZE<1024)) ; then
++   echo "ERROR: ZED_SDK_Linux.run size is not valid: ${SIZE}B!!!";
++   echo " * Verify the ZED SDK download link validity: " ${URL} ;
++   exit 1
++fi
++
++sudo chmod 777 ./ZED_SDK_Linux.run
++sudo ./ZED_SDK_Linux.run silent skip_od_module skip_python skip_drivers
+ 
+-# Symlink required for zed SDK, based on
+-# https://github.com/stereolabs/zed-docker/blob/fd514606174d8bb09f21a229f1099205b284ecb6/4.X/ubuntu/devel/Dockerfile#L24
+-sudo ln -sf /lib/x86_64-linux-gnu/libusb-1.0.so.0 /usr/lib/x86_64-linux-gnu/libusb-1.0.so
+ 
+ # Install zed-ros2-wrapper dependencies
+-sudo apt update && sudo apt-get install --no-install-recommends ros-humble-zed-msgs ros-humble-cob-srvs -y
++sudo apt-get update && sudo apt-get install -y \
++   ros-humble-zed-msgs \
++   ros-humble-nmea-msgs \
++   ros-humble-geographic-msgs \
++   ros-humble-robot-localization \
++   #ros-humble-point-cloud-transport \
++   #ros-humble-point-cloud-transport-plugins \
++   #ros-humble-draco-point-cloud-transport \
++   #ros-humble-zlib-point-cloud-transport \
++   #ros-humble-zstd-point-cloud-transport \
++   #ros-humble-point-cloud-transport \
++
++# Uncomment the point cloud transport packages above if you want to use point cloud compression.
++
++# Install base Isaac ROS Nitros packages
++sudo apt-get update && sudo apt-get install -y \
++   ros-humble-isaac-ros-common \
++   ros-humble-isaac-ros-nitros \
++   ros-humble-isaac-ros-managed-nitros \
++   ros-humble-isaac-ros-nitros-image-type
+ 
+ # Cleanup
+-rm ZED_SDK_Linux_Ubuntu${UBUNTU_RELEASE_YEAR}.run
++sudo rm -rf /usr/local/zed/resources/*
++rm -rf ZED_SDK_Linux.run
+ sudo rm -rf /var/lib/apt/lists/*
++

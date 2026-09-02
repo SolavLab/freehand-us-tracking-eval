@@ -1,0 +1,42 @@
+Harden the ZED SDK download in the image build
+
+Applies on top of 0001. Two changes, neither of which affects what gets
+installed or how the container behaves:
+
+  * Drop `--no-check-certificate` from the wget invocation. It disabled TLS
+    certificate verification for a ~1 GB installer fetched over the network and
+    then executed as root -- a supply-chain weakness with no upside here, since
+    download.stereolabs.com presents a valid certificate. Upstream's original
+    line did not use the flag; it was added locally, most likely to work around
+    a transient CA-bundle problem in the base image, and the `apt-get install
+    ca-certificates` already present in this script is the correct fix for that.
+
+  * Replace `sudo chmod 777` with `chmod +x`. The file has just been downloaded
+    by this same script into /tmp; it needs to be executable, not
+    world-writable. World-writable plus subsequently executed as root is the
+    part worth avoiding. Upstream used `chmod +x`.
+
+The size sanity-check between the download and the execution is kept as-is: it
+catches the common failure where the URL 404s and wget writes a short error
+page, which would otherwise be executed.
+
+Recorded as a separate patch rather than folded into 0001 so that 0001 remains a
+faithful record of the image that produced the published results, and this
+hardening is visible as a deliberate, reviewable change.
+
+--- a/docker/scripts/install-zed-x86_64.sh
++++ b/docker/scripts/install-zed-x86_64.sh
+@@
+ URL=https://download.stereolabs.com/zedsdk/5.1/cu12/ubuntu22
+-wget -q --no-check-certificate -O ZED_SDK_Linux.run ${URL}
++wget -q -O ZED_SDK_Linux.run ${URL}
+ SIZE=$(du -sb './ZED_SDK_Linux.run' | awk '{ print $1 }')
+ if ((SIZE<1024)) ; then
+    echo "ERROR: ZED_SDK_Linux.run size is not valid: ${SIZE}B!!!";
+    echo " * Verify the ZED SDK download link validity: " ${URL} ;
+    exit 1
+ fi
+
+-sudo chmod 777 ./ZED_SDK_Linux.run
++chmod +x ./ZED_SDK_Linux.run
+ sudo ./ZED_SDK_Linux.run silent skip_od_module skip_python skip_drivers

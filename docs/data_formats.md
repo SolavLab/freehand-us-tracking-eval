@@ -98,17 +98,42 @@ absorbs. They do not affect the reported residuals.
 run.yaml                                   code version, env, dataset hash, CLI args
 recordings/<recording>/window.json         shared evaluation window, per-pipeline offsets
 recordings/<recording>/reference_fit.json  Vicon rigid-body residual statistics
-cells/<pipeline>/<recording>/residuals.csv frame, time_ms, d_trans_mm, d_rot_deg
+cells/<pipeline>/<recording>/residuals.csv
 cells/<pipeline>/<recording>/calibration.json
 cells/<pipeline>/<recording>/cell.json     status, n_frames, input hashes, summary stats
 ```
 
-`residuals.csv` carries the two per-frame error series:
+`residuals.csv` has five columns:
 
-- `d_trans_mm` — Euclidean distance between the SLAM-based and marker-based
-  camera positions in the Vicon frame.
-- `d_rot_deg` — the rotation angle of the relative rotation between the two
-  estimated orientations.
+| Column | Unit | Meaning |
+|---|---|---|
+| `frame` | — | Position within the evaluation window, `0..n-1` |
+| `source_frame` | — | The pipeline's own frame index, as it appears in `poses.csv` |
+| `time_ms` | ms | Acquisition clock, absolute epoch milliseconds |
+| `d_trans_mm` | mm | Euclidean distance between the SLAM-based and marker-based camera positions in the Vicon frame |
+| `d_rot_deg` | deg | Rotation angle of the relative rotation between the two estimated orientations |
+
+> The legacy output carried **only** a positional counter, split across two files
+> (`*_angles.csv` and `*_distances.csv`), with no time at all. A residual series
+> could therefore not be placed in time or joined back to its trajectory without
+> re-deriving the evaluation window. `source_frame` and `time_ms` are recovered
+> from the cropped trajectory the legacy tool wrote alongside them; the recovery
+> is checked by asserting equal lengths, that the legacy counter is exactly
+> `range(n)`, and that timestamps are monotonic.
+
+### Two time bases
+
+`calibration.json` reports the evaluation window twice, and they are **not** in
+the same units:
+
+- `vicon_window_ms` and `local_window_ms` are **relative** milliseconds, measured
+  from the first timestamp of the pipeline's full (uncropped) trajectory.
+- `time_ms` in `residuals.csv` is **absolute** epoch milliseconds.
+
+`local_window_ms` is a continuous requested interval; the rows in
+`residuals.csv` are the discrete frames that fall inside it, so the first and
+last `time_ms` sit just within the requested bounds rather than exactly on them.
+Both fields are labelled with their unit for this reason.
 
 `calibration.json` holds `T_camera_to_marker`, `T_slamworld_to_vicon`, the
 marker-intrinsic frame, the temporal offset, and every synchronization stage, as

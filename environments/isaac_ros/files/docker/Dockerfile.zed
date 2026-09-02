@@ -1,0 +1,21 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# disable terminal interaction for apt
+ENV DEBIAN_FRONTEND=noninteractive
+ENV SHELL=/bin/bash
+SHELL ["/bin/bash", "-c"]
+
+#ARG ARCH=aarch64
+ARG ARCH=x86_64
+
+# Copy the SDK install script
+COPY scripts/install-zed-${ARCH}.sh /opt/zed/install-zed.sh
+
+# Copy the entrypoint script to change the permissions of the ZED SDK folder
+# when the container starts to the correct location
+COPY scripts/zed-entrypoint.sh /usr/local/bin/scripts/entrypoint_additions/zed-entrypoint.sh
+
+# Install the ZED SDK
+RUN chmod +x /opt/zed/install-zed.sh && \
+   /opt/zed/install-zed.sh

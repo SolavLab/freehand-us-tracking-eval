@@ -1,0 +1,42 @@
+# Upstream sources for the cuVSLAM pipelines, pinned to the revisions used.
+#
+# These repositories are NOT vendored into this project. Fetch them here, under
+# their own licences, and apply the modifications in ../patches/ and ../files/.
+# See ../README.md for what each modification does, and ../../../docs/licensing.md
+# for why nothing third-party is redistributed.
+#
+#   vcs import ../../src < repos.yaml
+#   ./apply-patches.sh
+#   ./build-image.sh
+#
+# isaac_ros_common is the only one this project modifies. The other two are used
+# unmodified except for the two launch files in extract/cuvslam/launch/, which
+# are installed into the visual-SLAM package rather than patched into it.
+
+repositories:
+  isaac_ros_common:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_common.git
+    # Exact revision the published image was built from. `git describe` on the
+    # working tree reports v3.2-8-7-ga40a017, i.e. 7 commits past the v3.2-8 tag.
+    version: a40a017
+
+  isaac_ros_visual_slam:
+    type: git
+    url: https://github.com/NVIDIA-ISAAC-ROS/isaac_ros_visual_slam.git
+    # Isaac ROS release 3.2, carrying cuVSLAM 3.2 -- the localization framework
+    # under evaluation for pipelines II and III.
+    version: release-3.2
+
+  zed-ros2-wrapper:
+    type: git
+    url: https://github.com/stereolabs/zed-ros2-wrapper.git
+    # Used only to play back SVO2 recordings and publish stereo + IMU topics for
+    # pipeline II. Its own positional tracking is disabled
+    # (pos_tracking.enabled: False) -- cuVSLAM does the tracking.
+    #
+    # Note this wrapper links the ZED SDK 5.1 installed inside the container,
+    # which is a different version from the SDK 5.3.0 used on the host for
+    # pipeline I. That is not an inconsistency: here the SDK only decodes SVO2,
+    # whereas pipeline I uses its positional-tracking module.
+    version: master

@@ -1,0 +1,37 @@
+{
+  "description": "Golden master for the 12 published pipeline x recording cells. Reproduced from the original code in Phase 0 and verified elementwise against the 2026-08-18 published artifacts and against Table 3 of the manuscript.",
+  "environment": {
+    "matplotlib": "3.10.8",
+    "numpy": "2.2.6",
+    "opencv": "4.13.0",
+    "pandas": "2.3.3",
+    "python": "3.10.12",
+    "scipy": "1.15.3"
+  },
+  "files": {
+    "rs-cuvslam/freehand/calibration.json": "579795fcbea4094f6797def07ea9a53ebddb140b00f7d974479e134c4c65fe76",
+    "rs-cuvslam/freehand/residuals.csv": "4547e7cef93cead4db5517a90d325629b0c34bdc70209aee03ad4c0fd5abcffb",
+    "rs-cuvslam/mixed/calibration.json": "6e7ad8778d1ee64ad5d78fde59679660c6bb17a9076602ecba0abc7f0c04be26",
+    "rs-cuvslam/mixed/residuals.csv": "a0b3e51f6247991befaf7880565793916883139208f82c81b2acc78980c1d0f8",
+    "rs-cuvslam/pivot-repeat/calibration.json": "918cb720e8cc249db1640aa5cb1976da5d939b83061ff175ce9e9b5c4cc04e4f",
+    "rs-cuvslam/pivot-repeat/residuals.csv": "79c55cdcb446278f6fcad0b9cb83bbd57e82428242a663d7d9e83d514271f7c0",
+    "rs-cuvslam/pivot/calibration.json": "36fd4958790a544e1289ba9746c89206b6221fde74f5edd720cc387c19615a1f",
+    "rs-cuvslam/pivot/residuals.csv": "36ba4242626e3d02b1b1522f0370df07a9908ee96b458d944e24293d290e6e1c",
+    "zed-cuvslam/freehand/calibration.json": "04a9aa368f056a5ef1c44a2b795330bded89139b7bb4c79c48e830c00cc39335",
+    "zed-cuvslam/freehand/residuals.csv": "8f1ca10d2de5f8294b6446dd70876c8efe6087aebcedf83f2ec16b6cb446709e",
+    "zed-cuvslam/mixed/calibration.json": "de73e4fc6189985fb069f87206e7d243b1197b47bbb0e1b5c4630151c90fa0bc",
+    "zed-cuvslam/mixed/residuals.csv": "a9b8a1fc160343e6d765aa87f4caf7a0e9ac915f189783efb91205402aba7519",
+    "zed-cuvslam/pivot-repeat/calibration.json": "652084ebacee2cb87847f1a0a72514c4a7c38760cdaba1eaca972b2f0fdd1007",
+    "zed-cuvslam/pivot-repeat/residuals.csv": "11dcc275e5ecbaead549c38ded2a078ef53eec289b7fdbf7c83f5dcb0b3b3643",
+    "zed-cuvslam/pivot/calibration.json": "c9c64ba0880a31784dd457f1c0c84755319c2081a040373d2b9ffcc8a9d7bb34",
+    "zed-cuvslam/pivot/residuals.csv": "723be593595f2764a54f89584276aa16b3f37cabdcd88070993c9ff608a3ee9a",
+    "zed-sdk/freehand/calibration.json": "f8978da2a9791413d408d22ba3cc8062af5d3d1cc9529a3e9c2e34d947cf3930",
+    "zed-sdk/freehand/residuals.csv": "5ba9182bb7595474a6f9f643341c28917102a51ab5db48aed42e25d664deae1e",
+    "zed-sdk/mixed/calibration.json": "f04a7082997aa5841d466218087ad3336f11daff7db1234eafe77224e6d9556c",
+    "zed-sdk/mixed/residuals.csv": "842a44fde97215b0706673a2f784a16a69a6d83a15a17c16cd150d796a0bb5b3",
+    "zed-sdk/pivot-repeat/calibration.json": "dd3dbe42acb3f4cbb1cb41b61ff60adea0c856f923433b8e56fdaea6bedeccb9",
+    "zed-sdk/pivot-repeat/residuals.csv": "df618a5dac8b2fafb86012521be9206a790e9c517e8b13a74c170c23addd6564",
+    "zed-sdk/pivot/calibration.json": "d47301548d3a421a147ad56f01ea6a9680c4cb13a1187821604b84f13e78dccd",
+    "zed-sdk/pivot/residuals.csv": "eebfc900dd8ff1c69537630a11c9dc884d50bbd0f3e363b036ffc1833ff37442"
+  }
+}
