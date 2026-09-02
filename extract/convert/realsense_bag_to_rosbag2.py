@@ -25,9 +25,19 @@ inertial samples. The accelerometer is read in a first pass and interpolated
 onto the gyroscope timestamps in a second, which is what `--unite-imu 2`, the
 default and the setting used for the published results, means.
 
-Ported from the original converter with four fixes, none of which changes the
-output:
+Ported from the original converter with five fixes. One of them changes the
+output, and is the reason this converter now reproduces the reference bags
+exactly:
 
+  * **The IMU passes waited only one second for a frame and treated the first
+    timeout as end-of-stream.** librealsense raises RuntimeError for both a
+    transient timeout and a genuine end of playback, so one slow read silently
+    ended the whole IMU collection -- yielding about 30 Hz of IMU instead of
+    400, roughly a twentieth of the inertial data, with the converter reporting
+    success. The camera loop had already been given a five-second timeout "under
+    heavy system load"; the IMU loops had not. `_imu_wait()` now retries. With
+    it the converter reproduces the reference bags exactly: same message counts,
+    bag timestamps equal to the nanosecond, identical payloads.
   * Four IMU methods that the default configuration never reaches were removed
     (195 lines). `--unite-imu 2` takes the two-pass path instead.
   * `_interpolate_accel` sorted the entire accelerometer history and scanned it
@@ -550,6 +560,33 @@ class DirectRealSenseConverter:
         f = (target_timestamp_ms - lower) / span
         return {k: a[k] + f * (b[k] - a[k]) for k in ("x", "y", "z")}
 
+    # librealsense raises RuntimeError both for a genuine end-of-playback and
+    # for a transient timeout, and the two are indistinguishable from the
+    # exception alone. The camera loop already allows 5 s "under heavy system
+    # load"; the IMU loops used 1 s and treated the first timeout as the end of
+    # the stream, so one slow read silently truncated the whole IMU collection.
+    #
+    # That is what made re-converting produce ~30 Hz of IMU instead of 400: not
+    # a change in the data, just a machine busy enough to miss a 1 s deadline.
+    IMU_TIMEOUT_MS = 5000
+    IMU_MAX_CONSECUTIVE_TIMEOUTS = 3
+
+    def _imu_wait(self, pipeline):
+        """Pull the next motion frameset, retrying transient timeouts.
+
+        Raises RuntimeError only after several consecutive timeouts, which is
+        then taken to mean the playback really has ended.
+        """
+        last = None
+        for attempt in range(self.IMU_MAX_CONSECUTIVE_TIMEOUTS):
+            try:
+                return pipeline.wait_for_frames(timeout_ms=self.IMU_TIMEOUT_MS)
+            except RuntimeError as exc:
+                last = exc
+                log.debug("IMU wait timed out (attempt %d/%d)",
+                          attempt + 1, self.IMU_MAX_CONSECUTIVE_TIMEOUTS)
+        raise last
+
     def _preprocess_accel_frames(self):
         """Pre-process and collect ALL accel frames into history
         
@@ -574,7 +611,7 @@ class DirectRealSenseConverter:
         
         try:
             while True:
-                frames = imu_pipeline.wait_for_frames(timeout_ms=1000)
+                frames = self._imu_wait(imu_pipeline)
                 
                 for i in range(frames.size()):
                     frame = frames[i]
@@ -616,7 +653,7 @@ class DirectRealSenseConverter:
         
         try:
             while True:
-                frames = imu_pipeline.wait_for_frames(timeout_ms=1000)
+                frames = self._imu_wait(imu_pipeline)
                 
                 for i in range(frames.size()):
                     frame = frames[i]
@@ -666,13 +703,13 @@ class DirectRealSenseConverter:
     def _validate_output(self):
         """Check the written bag actually contains the streams it should.
 
-        This exists because the failure it catches is real and was silent. The
-        converter drives two concurrent playback pipelines over the same file --
-        one for the infrared streams, one for the IMU, so the IMU is not
-        throttled to the camera rate -- and that arrangement is timing
-        dependent. On some librealsense versions the IMU pipeline yields a small
-        fraction of its samples, producing a bag that opens fine, plays fine,
-        and silently starves the visual-inertial SLAM of inertial data.
+        This exists because the failure it catches was real and silent: a
+        one-second IMU timeout, treated as end-of-stream, dropped roughly 94 %
+        of the inertial data while the converter reported success. That specific
+        cause is fixed (see `_imu_wait`), but the check stays, because any
+        future truncation of a playback stream would look exactly the same --
+        a bag that opens fine, plays fine, and quietly starves the
+        visual-inertial SLAM.
 
         Nothing downstream noticed. The driver script checked only that the
         output files existed, so a bag holding a fraction of its IMU was
@@ -705,9 +742,9 @@ class DirectRealSenseConverter:
             )
         if imu_hz < self.EXPECTED_IMU_HZ * self.RATE_TOLERANCE:
             problems.append(
-                "IMU at %.1f Hz over %.1f s, expected about %.0f Hz (%d written). This is "
-                "the dual-pipeline race described in extract/README.md: the IMU playback "
-                "yielded only a fraction of its samples."
+                "IMU at %.1f Hz over %.1f s, expected about %.0f Hz (%d written). The "
+                "IMU playback delivered only a fraction of its samples; see "
+                "extract/README.md."
                 % (imu_hz, duration_s, self.EXPECTED_IMU_HZ, self.imu_count)
             )
         if problems:

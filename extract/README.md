@@ -117,45 +117,51 @@ python extract/convert/realsense_bag_to_rosbag2.py \
     "$VIPOSE_RAW_ROOT/pivot/test2.bag" -o /path/to/pivot_converted
 ```
 
-### The IMU playback race — read this before re-converting
+### A one-second timeout that silently dropped 94 % of the IMU
 
-**On this machine today, conversion does not reliably reproduce the bags the
-published results were built from, and the failure used to be silent.**
+Worth reading before touching this converter, because the bug it describes was
+silent and cost a day to find.
 
-The two playback pipelines are opened over the same file concurrently. That is
-what keeps the IMU at its native rate, and it is also timing dependent. Measured
-on the pivot recording:
+The converter drives two playback pipelines over the same file — one for the
+infrared streams, one for the IMU — so that the IMU is not throttled to the
+camera rate. Both IMU passes pulled frames with:
+
+```python
+while True:
+    frames = imu_pipeline.wait_for_frames(timeout_ms=1000)
+    ...
+except RuntimeError:
+    pass
+```
+
+librealsense raises `RuntimeError` **both** for a genuine end-of-playback and
+for a transient timeout, and the two are indistinguishable from the exception
+alone. So a single slow read — one busy moment on the machine — ended the entire
+IMU collection and the converter carried on and reported success.
+
+The camera loop had already been given `timeout_ms=5000`, with the comment
+"Use longer timeout (5 seconds) under heavy system load". The IMU loops kept the
+one-second deadline. That asymmetry is the whole bug.
+
+Measured on the pivot recording, before and after:
 
 | | images/side | IMU | implied IMU rate |
 |---|---|---|---|
-| reference bag (April 2026) | 1677 | 22262 | 398 Hz — correct |
-| original converter, today | 1677 | 1942 | 35 Hz |
-| this converter, today | 1677 | 1635 | 29 Hz |
+| reference bag (Nov 2025 and Apr 2026) | 1677 | 22262 | 398 Hz |
+| as-inherited, re-run today | 1677 | 1635–1942 | 29–35 Hz |
+| **after the fix** | **1677** | **22262** | **398 Hz** |
 
-The camera stream is fine and reproduces exactly. The IMU is not: it comes back
-at roughly the *camera* rate, which is precisely the throttling the two-pipeline
-design exists to avoid. The original code and this port fail the same way, so
-this is a librealsense or environment change rather than a regression in the
-port — and the reference bags themselves are correct, so nothing in the paper is
-affected.
+`_imu_wait()` now retries a timeout up to three times at five seconds each, and
+concludes the stream has ended only after three consecutive failures. With that,
+re-converting reproduces the reference bag **exactly**: same topics, same message
+counts, bag timestamps equal to the nanosecond, identical payload sizes.
 
-What was silent: the driver script checked only that the output files existed.
-A bag holding a tenth of its inertial data was therefore reported as a
-successful conversion, and would have gone on to starve the visual-inertial SLAM
-with no indication anything was wrong.
-
-`_validate_output()` now checks the written bag's actual image and IMU rates
-against the recording's span and **raises** if either falls below half the
-expected rate. Re-converting today fails with:
-
-```
-Error: the converted bag does not contain the expected streams:
-  - IMU at 29.3 Hz over 55.9 s, expected about 400 Hz (1635 written).
-```
-
-which is the correct outcome. If you need to regenerate these bags, expect to
-investigate the playback race first; pinning `pyrealsense2` to the version that
-produced the reference bags is the obvious first thing to try.
+Two lessons are baked into the code. `_validate_output()` measures the written
+bag's actual image and IMU rates and **raises** if either falls below half the
+expected value, so a truncated conversion can never again be reported as a
+success — the driver script checked only that the output files existed. And the
+retry helper logs each timeout at debug level, so a marginal machine is visible
+rather than silent.
 
 ## Device calibration is baked in
 
