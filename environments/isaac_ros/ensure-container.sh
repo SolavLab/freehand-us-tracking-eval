@@ -82,6 +82,14 @@ launch_container() {
   # The arguments below mirror run_dev.sh's x86_64 path (its Jetson-only mounts
   # are omitted). The two ZED mounts are required: the SDK reads its per-camera
   # calibration and neural resources from the host.
+  #
+  # ROS_DOMAIN_ID is INHERITED from the host, never defaulted here. run_dev.sh
+  # passes it bare (`-e ROS_DOMAIN_ID`) for the same reason. Forcing a value
+  # instead puts the container on a different DDS domain from the shell that
+  # started it, and DDS domains are isolated -- so `ros2 topic list` on the host
+  # shows only its own /parameter_events and /rosout while the pipeline runs
+  # perfectly well, unseen, next door. That is a genuinely confusing failure and
+  # it costs nothing to avoid.
   echo "   starting '${CONTAINER}' detached from ${image}"
   docker run -d \
     --name "${CONTAINER}" \
@@ -131,6 +139,18 @@ launch_container() {
   return 1
 }
 
+check_domain_match() {
+  local host="${ROS_DOMAIN_ID:-0}" inside
+  inside="$(docker exec "${CONTAINER}" printenv ROS_DOMAIN_ID 2>/dev/null || echo 0)"
+  inside="${inside:-0}"
+  if [ "${host}" != "${inside}" ]; then
+    echo "   warning: this shell is on ROS_DOMAIN_ID=${host} but the running container" >&2
+    echo "            is on ${inside}. DDS domains are isolated, so 'ros2 topic list'" >&2
+    echo "            here will not show the pipeline's topics. Recreate the container" >&2
+    echo "            with a matching domain:  docker rm -f ${CONTAINER}" >&2
+  fi
+}
+
 ensure_container() {
   local ws="${1:-${ISAAC_ROS_WS_HOST:-}}"
   local state
@@ -139,6 +159,7 @@ ensure_container() {
 
   case "${state}" in
     running)
+      check_domain_match
       if container_ready; then return 0; fi
       echo "   running but the workspace is not built; run environments/isaac_ros/build-workspace.sh" >&2
       return 1

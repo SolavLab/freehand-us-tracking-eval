@@ -40,8 +40,8 @@ source "${HERE}/../../environments/isaac_ros/ensure-container.sh"
 
 in_container() {
   docker exec -i --user "${EXEC_USER}" \
-    -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
-    -e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}" \
+    ${ROS_DOMAIN_ID:+-e ROS_DOMAIN_ID="${ROS_DOMAIN_ID}"} \
+    ${ROS_LOCALHOST_ONLY:+-e ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY}"} \
     -e ISAAC_ROS_WS="${RELEASE_IN_CONTAINER}" \
     "${CONTAINER}" bash -lc "$1"
 }
