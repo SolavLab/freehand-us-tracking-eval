@@ -55,6 +55,42 @@ sourced and refreshes the rosdep index.
 
 The resulting image key is `ros2_humble.realsense.zed.custom`.
 
+## No image is distributed
+
+Only configuration is in this repository: `repos.yaml` pins the upstream
+sources, `patches/` and `files/` are the modifications, and the image is built
+locally by NVIDIA's own `build_image_layers.sh` from the Dockerfiles it composes.
+Nothing here redistributes an NVIDIA image or an NVIDIA-derived layer, so the
+NVIDIA EULA is between you and NVIDIA, as it should be.
+
+`run-container.sh` is the interactive path and builds the image if it is
+missing. `ensure-container.sh` is the scripted path and deliberately refuses to
+build: if the image is absent it says so and points at `run-container.sh`,
+rather than silently starting a 40 GB build inside a pipeline run.
+
+## The container must be ready before the pipeline starts
+
+Both entrypoint additions run a `colcon build` on **every** container start --
+`01_my_setup.user.sh` builds `isaac_ros_visual_slam`, `zed-entrypoint.sh` builds
+`zed_wrapper` -- so a freshly started container spends about a minute rebuilding
+the workspace before it is usable.
+
+Checking for `install/setup.bash` is not a readiness test. That file survives
+from the previous build, so it exists immediately while the libraries beside it
+are being replaced. Launching then fails with missing `.so` files and missing
+Python modules, which looks like a broken image and is not.
+
+`ensure-container.sh` instead waits for PID 1 to become the container command.
+`workspace-entrypoint.sh` ends with `exec gosu admin "$@"`, so PID 1 *is* the
+entrypoint until every addition has finished and *becomes* the command
+afterwards. That is exact, and it needs no log scraping.
+
+Note also that `docker exec` sessions do not inherit anything the entrypoint set
+at runtime -- they start from the image's static `ENV`. This is why every
+command run in the container sources `install/setup.bash` first, which chains to
+the ROS underlay recorded at build time. The original scripts do the same, and
+it is the reason they work.
+
 ## Notes for anyone rebuilding this
 
 - **The image is x86-64 only.** The ZED SDK URL and the install script are

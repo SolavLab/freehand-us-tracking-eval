@@ -30,6 +30,14 @@ OUT_REL="slam_output/${OUTPUT_NAME}"
 OUT_DIR="${WS}/${OUT_REL}"
 POSES_RAW=/tmp/poses_response.txt
 
+# Bring the container up if it is not already, so the driver works from a cold
+# machine. Without this, every failure mode below -- container never started,
+# container stopped, container removed when its terminal closed -- surfaces as
+# the same opaque "No such container" from the docker daemon.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../environments/isaac_ros/ensure-container.sh
+source "${HERE}/../../environments/isaac_ros/ensure-container.sh"
+
 in_container() {
   docker exec -i --user "${EXEC_USER}" \
     -e ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}" \
@@ -87,6 +95,7 @@ convert() {
   echo "== done: ${target}"
 }
 
+ensure_container "${ISAAC_ROS_WS_HOST:-}"
 preflight
 launch
 collect
