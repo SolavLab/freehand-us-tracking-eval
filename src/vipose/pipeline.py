@@ -39,7 +39,12 @@ from .results import Residuals
 from .sync.resample import resample_reference
 from .sync.stages import crosscorrelation_offset, refine_offset_omega
 
-__all__ = ["CellResult", "evaluate_recording", "shared_window_from_offsets"]
+__all__ = [
+    "CellResult",
+    "evaluate_recording",
+    "shared_window_from_offsets",
+    "stage3_objective_curve",
+]
 
 log = logging.getLogger(__name__)
 
@@ -161,6 +166,31 @@ def _refine_stage3(track, reference, offset_ms, window_ms, label=""):
         "median_before": objective(offset_ms),
         "median_after": objective(best),
     }
+
+
+def stage3_objective_curve(
+    track: Track,
+    reference: MocapData,
+    offset_ms: float,
+    window_ms: tuple[float, float],
+    *,
+    span_ms: float = GRID_SPAN_MS,
+    step_ms: float = GRID_STEP_MS,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Median rotational residual as a function of the temporal offset.
+
+    Returns ``(offsets, median_phi)`` with offsets **relative to**
+    ``offset_ms``. This is the stage-3 objective, exposed because its *shape*
+    is the point: it is shallow, and how shallow decides how tightly the scalar
+    angular-speed criterion of stages 1 and 2 can localise the offset at all.
+    Appendix A plots it.
+    """
+    relative = np.arange(-span_ms, span_ms + step_ms / 2, step_ms)
+    values = np.array([
+        _median_rotational_residual(track, reference, offset_ms + d, window_ms)
+        for d in relative
+    ])
+    return relative, values
 
 
 def evaluate_recording(

@@ -105,6 +105,17 @@ def _cmd_tables(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_figures(args: argparse.Namespace) -> int:
+    from .report.figures import write_appendix_figures
+
+    ds = Dataset.load(args.dataset, verify_hashes=False)
+    print(f"generating figures from {args.store} (this evaluates the stage-3 objective)")
+    written = write_appendix_figures(ds, args.store, args.out)
+    for path in written:
+        print(f"  {path} ({path.stat().st_size // 1024} kB)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="vipose", description=__doc__.splitlines()[0])
     p.add_argument(
@@ -133,6 +144,11 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--store", default=DEFAULT_GOLDEN, help="result store or golden master")
     t.add_argument("--out", default="tables", help="output directory")
     t.set_defaults(func=_cmd_tables)
+
+    f = sub.add_parser("figures", help="regenerate the manuscript's figures")
+    f.add_argument("--store", default=DEFAULT_GOLDEN, help="result store or golden master")
+    f.add_argument("--out", default="figures", help="output directory")
+    f.set_defaults(func=_cmd_figures)
 
     args = p.parse_args(argv)
     return args.func(args)
