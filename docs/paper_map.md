@@ -17,7 +17,7 @@ Everything below needs only that. No raw recordings, no GPU, no container.
 |---|---|---|---|
 | Table 2 — motion characteristics | `vipose tables` | `tables/motion.tex` | **identical**, 32/32 numeric tokens |
 | Table 3 — hand–eye residuals | `vipose tables` | `tables/residuals.tex` | **identical**, 84/84 numeric tokens |
-| Vicon rigid-body residuals | `vipose tables` | `tables/reference_fit.tex` | **does not match exactly** — see below |
+| Vicon rigid-body residuals | `vipose tables` | `tables/reference_fit.tex` | **identical**, 12/12 numeric tokens |
 
 The two `.tex` files are the table *body* — the rows between `\midrule` and
 `\bottomrule` — so they diff directly against the manuscript:
@@ -59,25 +59,6 @@ input frame leaves no gap. A repeated pose is exact equality of all six
 components with the previous row.
 
 ## Known gaps
-
-**The Vicon rigid-body residual table does not regenerate exactly.** The
-published values are reproduced to about 0.02 mm but not to the printed
-precision, and the exact definition behind them is not pinned down:
-
-| Recording | published | native 240 Hz | resampled (zed-sdk / zed-cuvslam / rs-cuvslam) |
-|---|---|---|---|
-| Pivot | 0.279 ± 0.088 | 0.244 ± 0.073 | 0.273 / 0.260 / 0.278 |
-| Freehand | 0.231 ± 0.066 | 0.220 ± 0.054 | 0.241 / 0.231 / 0.222 |
-| Mixed | 0.209 ± 0.058 | 0.237 ± 0.049 | 0.213 / 0.214 / 0.200 |
-| Pivot (repeat) | 0.265 ± 0.067 | 0.319 ± 0.068 | 0.267 / 0.266 / 0.277 |
-
-`reference_fit.tex` emits the **native** figure, because a table characterising
-the motion-capture system should not depend on which camera's clock the
-reference happened to be resampled onto. The published values sit among the
-resampled ones instead, but match no single pipeline, so the grid they were
-computed on is not identified. Nothing else depends on this: the table is
-context for the reference's own uncertainty, and the 0.28 mm figure the paper
-uses as an interpretation floor is unaffected at the precision it is quoted.
 
 **Figure 3 has no generator in this repository.** It is still produced by
 `plot_combined_metrics_violin.py` in the original tree, which reads the legacy

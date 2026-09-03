@@ -22,8 +22,10 @@ from ..results import read_calibration
 
 __all__ = ["omega_overlay", "stage3_objective", "write_appendix_figures", "PIPELINE_COLOURS"]
 
-#: One colour per pipeline, used consistently across every figure.
-PIPELINE_COLOURS = {"zed-sdk": "#c0392b", "zed-cuvslam": "#1f6fb4", "rs-cuvslam": "#e08a1e"}
+#: One colour per pipeline, shared with the results figure so that a reader
+#: carries a single colour mapping through the whole paper. These are the
+#: matplotlib tab10 blue, green and orange used by the violin plots.
+PIPELINE_COLOURS = {"zed-sdk": "#1f77b4", "zed-cuvslam": "#2ca02c", "rs-cuvslam": "#ff7f0e"}
 PIPELINE_ROWS = ["zed-sdk", "zed-cuvslam", "rs-cuvslam"]
 CONDITIONS = ["pivot", "mixed", "freehand"]
 
@@ -87,7 +89,7 @@ def omega_overlay(
         show = (t_cam >= t0) & (t_cam <= t0 + seconds * 1000.0)
 
         ax.plot((t_cam[show] - t0) / 1000.0, on_camera[show] * RAD_PER_MS_TO_DEG_PER_S,
-                color="0.35", lw=0.7, label="Vicon reference")
+                color="0.35", lw=0.7, label="Vicon")
         ax.plot((t_cam[show] - t0) / 1000.0, omega_cam[show] * RAD_PER_MS_TO_DEG_PER_S,
                 color=PIPELINE_COLOURS[pipeline], lw=0.8,
                 label=dataset.label(pipeline=pipeline))

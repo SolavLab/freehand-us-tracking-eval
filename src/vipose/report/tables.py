@@ -221,14 +221,22 @@ def _calibration_path(store: Path, pipeline: str, recording: str) -> Path:
 def reference_fit_table(dataset: Dataset, store: str | Path) -> dict:
     """Per-frame RMS residual of the Kabsch fit, within the evaluation window.
 
-    Computed on the reference's **native 240 Hz samples**, not on the reference
-    resampled to camera timestamps. That distinction matters and is easy to get
-    wrong: resampling interpolates between marker positions, which smooths the
-    constellation and lowers the apparent fit residual -- for the pivot
-    recording, 0.273 mm mean instead of 0.279. The published table is the native
-    figure, because it characterises the motion-capture system rather than the
-    evaluation grid. (`cell.json` reports the resampled figure, since there it
-    describes the samples that actually entered that cell's residuals.)
+    Computed on the motion-capture system's **native 240 Hz samples**, not on
+    the trajectory resampled to camera timestamps, since the table characterises
+    the motion-capture system rather than the evaluation grid.
+
+    The window is applied **before** the fit, not after. That is the whole
+    subtlety: the Kabsch fit measures each frame's marker constellation against
+    a reference constellation taken from the first frame it is given, so
+    cropping afterwards leaves the reference at the first frame of the *whole
+    recording* and reports residuals against a constellation from outside the
+    window. The difference is not small and does not have a consistent sign --
+    0.244 against 0.279 mm for the pivot recording, 0.319 against 0.265 for its
+    repeat.
+
+    (`cell.json` reports a different quantity: the fit residual on the resampled
+    trajectory, describing the samples that actually entered that cell's
+    residuals.)
     """
     import json
 
@@ -252,15 +260,14 @@ def reference_fit_table(dataset: Dataset, store: str | Path) -> dict:
             marker_prefix=dataset.marker_prefix,
             expected_rate_hz=dataset.vicon_rate_hz,
         )
-        rb = fit_rigid_body(mocap, min_markers=4)
-        keep = (rb.time_ms >= lo) & (rb.time_ms <= hi) & rb.valid
-        stats = summarize(rb.residual_mm[keep])
+        rb = fit_rigid_body(mocap.cropped(lo, hi), min_markers=4)
+        stats = summarize(rb.residual_mm[rb.valid])
         rows.append({
             "recording": recording,
             "label": dataset.label(recording=recording),
             "is_repeat": recording == MOTION_REPEAT,
-            "n_samples": int(keep.sum()),
-            "duration_s": float((rb.time_ms[keep][-1] - rb.time_ms[keep][0]) / 1000.0),
+            "n_samples": int(rb.valid.sum()),
+            "duration_s": float((rb.time_ms[-1] - rb.time_ms[0]) / 1000.0),
             "residual_mm": stats.as_dict(),
         })
     return {"table": "reference_fit", "dataset": dataset.id, "rows": rows}
