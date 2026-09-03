@@ -34,8 +34,10 @@ vipose evaluate          # synchronization, calibration, residuals  (~30 min)
 vipose tables            # -> tables/residuals.tex
 ```
 
-`vipose tables` regenerates the manuscript's residuals table. Its output is
-character-for-character identical to the table body in the paper.
+`vipose tables` regenerates the manuscript's tables and `vipose figures` its
+appendix figures. Table 2 and Table 3 come out character-for-character identical
+to the paper. `docs/paper_map.md` maps every published number to the command
+that produces it, and is explicit about the three that do not yet regenerate.
 
 ## What is here
 

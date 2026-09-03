@@ -23,6 +23,8 @@ __all__ = [
     "write_residuals_table",
     "motion_table",
     "write_motion_table",
+    "reference_fit_table",
+    "write_reference_fit_table",
 ]
 
 # Row order follows the manuscript, which groups by pipeline with the repeated
@@ -209,3 +211,82 @@ def _calibration_path(store: Path, pipeline: str, recording: str) -> Path:
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(f"no calibration.json for {pipeline}/{recording} under {store}")
+
+
+# --------------------------------------------------------------------------
+# Reference quality (the manuscript's Vicon rigid-body residual table)
+# --------------------------------------------------------------------------
+
+
+def reference_fit_table(dataset: Dataset, store: str | Path) -> dict:
+    """Per-frame RMS residual of the Kabsch fit, within the evaluation window.
+
+    Computed on the reference's **native 240 Hz samples**, not on the reference
+    resampled to camera timestamps. That distinction matters and is easy to get
+    wrong: resampling interpolates between marker positions, which smooths the
+    constellation and lowers the apparent fit residual -- for the pivot
+    recording, 0.273 mm mean instead of 0.279. The published table is the native
+    figure, because it characterises the motion-capture system rather than the
+    evaluation grid. (`cell.json` reports the resampled figure, since there it
+    describes the samples that actually entered that cell's residuals.)
+    """
+    import json
+
+    from ..geometry.rigid_body import fit_rigid_body
+    from ..io.mocap import load_mocap
+    from ..metrics import summarize
+
+    store = Path(store)
+    rows = []
+    for recording in MOTION_ORDER + [MOTION_REPEAT]:
+        windows = {
+            tuple(json.loads(_calibration_path(store, p, recording).read_text())["vicon_window_ms"])
+            for p in dataset.pipelines
+        }
+        if len(windows) != 1:
+            raise ValueError(f"{recording}: evaluation window differs between pipelines")
+        lo, hi = windows.pop()
+
+        mocap = load_mocap(
+            dataset.reference_csv(recording),
+            marker_prefix=dataset.marker_prefix,
+            expected_rate_hz=dataset.vicon_rate_hz,
+        )
+        rb = fit_rigid_body(mocap, min_markers=4)
+        keep = (rb.time_ms >= lo) & (rb.time_ms <= hi) & rb.valid
+        stats = summarize(rb.residual_mm[keep])
+        rows.append({
+            "recording": recording,
+            "label": dataset.label(recording=recording),
+            "is_repeat": recording == MOTION_REPEAT,
+            "n_samples": int(keep.sum()),
+            "duration_s": float((rb.time_ms[keep][-1] - rb.time_ms[keep][0]) / 1000.0),
+            "residual_mm": stats.as_dict(),
+        })
+    return {"table": "reference_fit", "dataset": dataset.id, "rows": rows}
+
+
+def reference_fit_to_latex(table: dict) -> str:
+    lines = []
+    for row in table["rows"]:
+        if row["is_repeat"]:
+            lines.append(r"\addlinespace")
+        r = row["residual_mm"]
+        lines.append(
+            f"{row['label']:<16s} & {row['duration_s']:.1f} & "
+            f"${r['mean']:.3f} \\pm {r['sd']:.3f}$ & {r['maximum']:.3f} \\\\"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_reference_fit_table(dataset: Dataset, store: str | Path, out_dir: str | Path) -> dict:
+    import json
+
+    table = reference_fit_table(dataset, store)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "reference_fit.tex").write_text(reference_fit_to_latex(table))
+    with open(out / "reference_fit.json", "w") as f:
+        json.dump(table, f, indent=2)
+        f.write("\n")
+    return table
