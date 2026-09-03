@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .metrics import summarize
 from .recordings import Dataset, DatasetError
-from .report.tables import PIPELINE_ORDER, write_residuals_table
+from .report.tables import PIPELINE_ORDER, write_motion_table, write_residuals_table
 from .results import read_residuals
 
 DEFAULT_DATASET = "datasets/probe-tracking-2025-10-23"
@@ -95,7 +95,9 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
 def _cmd_tables(args: argparse.Namespace) -> int:
     ds = Dataset.load(args.dataset, verify_hashes=False)
     table = write_residuals_table(ds, args.store, args.out)
-    print(f"wrote {Path(args.out) / 'residuals.tex'} and residuals.json")
+    motion = write_motion_table(ds, args.store, args.out)
+    print(f"wrote {Path(args.out) / 'residuals.tex'}, motion.tex and their .json")
+    print(f"  motion: {len(motion['rows'])} recordings")
     print(
         f"  {len(table['rows'])} rows, "
         f"pipelines in manuscript order: {', '.join(PIPELINE_ORDER)}"

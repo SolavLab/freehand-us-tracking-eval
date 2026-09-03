@@ -169,3 +169,96 @@ def test_repeat_recording_is_linked(dataset):
         assert (
             dataset.manifest["recordings"][meta["repeat_of"]]["condition"] == meta["condition"]
         ), f"{rid} claims to repeat a different condition"
+
+
+# --------------------------------------------------------------------------
+# Table 2 -- motion characteristics
+# --------------------------------------------------------------------------
+
+# Table 2 of the manuscript. Every quantity is computed from the Vicon
+# marker-cluster trajectory inside the shared evaluation window, so it is
+# independent of which pipeline is evaluated.
+# recording -> duration_s, angular_extent, omega_med, omega_p95,
+#              speed_med, speed_p95, path_m, shah_margin
+TABLE2 = {
+    "pivot":        (55.1, 108.3, 25.0, 58.6, 168, 428,  9.74, 0.031),
+    "freehand":     (46.9,  77.3, 21.0, 56.8, 269, 538, 13.39, 0.029),
+    "mixed":        (59.7,  98.1, 21.7, 62.1, 209, 525, 12.88, 0.036),
+    "pivot-repeat": (37.4, 116.1, 23.6, 51.7, 201, 386,  6.97, 0.044),
+}
+
+
+@pytest.fixture(scope="module")
+def motion(dataset):
+    from vipose.report.tables import motion_table
+
+    return {row["recording"]: row for row in motion_table(dataset, GOLDEN)["rows"]}
+
+
+@pytest.mark.parametrize("recording", sorted(TABLE2))
+def test_motion_characteristics_match_table2(motion, recording):
+    """Each recording reproduces its row of Table 2 at the printed precision."""
+    dur, ext, wm, wp, vm, vp, path, margin = TABLE2[recording]
+    row = motion[recording]
+    for label, got, expected, dp in (
+        ("duration_s", row["duration_s"], dur, 1),
+        ("angular_extent_deg", row["angular_extent_deg"], ext, 1),
+        ("omega_median", row["omega_median_deg_s"], wm, 1),
+        ("omega_p95", row["omega_p95_deg_s"], wp, 1),
+        ("speed_median", row["speed_median_mm_s"], vm, 0),
+        ("speed_p95", row["speed_p95_mm_s"], vp, 0),
+        ("path_length_m", row["path_length_m"], path, 2),
+        ("shah_margin", row["shah_margin"], margin, 3),
+    ):
+        assert round(got, dp) == expected, (
+            f"{recording} {label}: {got:.6f} rounds to {round(got, dp)}, "
+            f"Table 2 says {expected}"
+        )
+
+
+def test_every_recording_is_well_conditioned(motion):
+    """The paper's claim that no motion was degenerate.
+
+    Margins span 0.029 to 0.044, and the variation *between conditions*
+    (0.029-0.036) is smaller than that between the two repetitions of the pivot
+    condition (0.031 and 0.044) -- which is what licenses the paper's statement
+    that differences in conditioning do not account for the differences in
+    tracking error.
+    """
+    margins = {r: row["shah_margin"] for r, row in motion.items()}
+    assert min(margins.values()) > 0.02, f"a motion is close to degenerate: {margins}"
+
+    conditions = [margins[r] for r in ("pivot", "mixed", "freehand")]
+    between_conditions = max(conditions) - min(conditions)
+    between_repeats = abs(margins["pivot"] - margins["pivot-repeat"])
+    assert between_conditions < between_repeats, (
+        f"spread between conditions ({between_conditions:.4f}) is no longer smaller "
+        f"than between the pivot repetitions ({between_repeats:.4f}); the paper's "
+        "argument about conditioning depends on this"
+    )
+
+
+def test_characteristic_frequency_separates_constrained_from_free(motion):
+    """The paper's |a|/|v| grouping: the two pivots against mixed and freehand."""
+    f = {r: row["characteristic_frequency_hz"] for r, row in motion.items()}
+    pivots = (f["pivot"], f["pivot-repeat"])
+    free = (f["mixed"], f["freehand"])
+    assert max(pivots) < min(free), (
+        f"pivot {pivots} no longer separates from mixed/freehand {free}"
+    )
+
+
+def test_motion_latex_matches_the_manuscript(dataset, tmp_path):
+    """The emitted Table 2 body is one row per recording, in the paper's order."""
+    from vipose.report.tables import motion_table, motion_to_latex
+
+    table = motion_table(dataset, GOLDEN)
+    assert [r["recording"] for r in table["rows"]] == [
+        "pivot", "freehand", "mixed", "pivot-repeat"
+    ]
+    tex = motion_to_latex(table)
+    rows = [ln for ln in tex.splitlines() if ln.rstrip().endswith(r"\\")]
+    assert len(rows) == 4
+    for line in rows:
+        assert line.count("&") == 8, f"expected 9 columns: {line}"
+    assert tex.count(r"\addlinespace") == 1

@@ -18,7 +18,12 @@ from ..metrics import summarize
 from ..recordings import Cell, Dataset
 from ..results import read_residuals
 
-__all__ = ["residuals_table", "write_residuals_table"]
+__all__ = [
+    "residuals_table",
+    "write_residuals_table",
+    "motion_table",
+    "write_motion_table",
+]
 
 # Row order follows the manuscript, which groups by pipeline with the repeated
 # pivot acquisition set apart from the three motion conditions.
@@ -109,3 +114,98 @@ def _residuals_path(store: Path, cell: Cell) -> Path:
         if candidate.is_file():
             return candidate
     raise FileNotFoundError(f"no residuals.csv for {cell} under {store}")
+
+
+# --------------------------------------------------------------------------
+# Motion characteristics (the manuscript's Table 2)
+# --------------------------------------------------------------------------
+
+MOTION_ORDER = ["pivot", "freehand", "mixed"]     # the manuscript's row order
+MOTION_REPEAT = "pivot-repeat"
+
+
+def motion_table(dataset: Dataset, store: str | Path) -> dict:
+    """Compute the motion-characteristics table from a result store.
+
+    Every quantity comes from the Vicon marker-cluster trajectory inside the
+    shared evaluation window, so the table is independent of which pipeline is
+    evaluated -- and the code asserts that, rather than assuming it.
+    """
+    import json
+
+    from ..geometry.rigid_body import fit_rigid_body
+    from ..io.mocap import load_mocap
+    from ..motion import characterise
+
+    store = Path(store)
+    rows = []
+    for recording in MOTION_ORDER + [MOTION_REPEAT]:
+        windows = set()
+        for pipeline in dataset.pipelines:
+            calib = _calibration_path(store, pipeline, recording)
+            windows.add(tuple(json.loads(calib.read_text())["vicon_window_ms"]))
+        if len(windows) != 1:
+            raise ValueError(
+                f"{recording}: the evaluation window differs between pipelines "
+                f"({windows}); the motion characterisation would not be "
+                "pipeline-independent"
+            )
+        lo, hi = windows.pop()
+
+        mocap = load_mocap(
+            dataset.reference_csv(recording),
+            marker_prefix=dataset.marker_prefix,
+            expected_rate_hz=dataset.vicon_rate_hz,
+        )
+        rb = fit_rigid_body(mocap, min_markers=4)
+        keep = (rb.time_ms >= lo) & (rb.time_ms <= hi)
+        rows.append(
+            characterise(
+                recording,
+                rb.time_ms[keep],
+                rb.translation[keep],
+                rb.rotvec[keep],
+                sample_rate_hz=dataset.vicon_rate_hz,
+            ).as_dict()
+            | {"label": dataset.label(recording=recording),
+               "is_repeat": recording == MOTION_REPEAT}
+        )
+    return {"table": "motion", "dataset": dataset.id, "rows": rows}
+
+
+def motion_to_latex(table: dict) -> str:
+    lines = []
+    for row in table["rows"]:
+        if row["is_repeat"]:
+            lines.append(r"\addlinespace")
+        lines.append(
+            f"{row['label']:<16s} & {row['duration_s']:.1f} & "
+            f"{row['angular_extent_deg']:.1f} & {row['omega_median_deg_s']:.1f} & "
+            f"{row['omega_p95_deg_s']:.1f} & {row['speed_median_mm_s']:.0f} & "
+            f"{row['speed_p95_mm_s']:.0f} & {row['path_length_m']:5.2f} & "
+            f"{row['shah_margin']:.3f} \\\\"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def write_motion_table(dataset: Dataset, store: str | Path, out_dir: str | Path) -> dict:
+    import json
+
+    table = motion_table(dataset, store)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "motion.tex").write_text(motion_to_latex(table))
+    with open(out / "motion.json", "w") as f:
+        json.dump(table, f, indent=2)
+        f.write("\n")
+    return table
+
+
+def _calibration_path(store: Path, pipeline: str, recording: str) -> Path:
+    for candidate in (
+        store / pipeline / recording / "calibration.json",
+        store / "cells" / pipeline / recording / "calibration.json",
+    ):
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(f"no calibration.json for {pipeline}/{recording} under {store}")
