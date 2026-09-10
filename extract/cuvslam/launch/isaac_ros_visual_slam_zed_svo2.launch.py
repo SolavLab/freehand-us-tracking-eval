@@ -283,23 +283,6 @@ def generate_launch_description():
         ],
         output='screen'
     )
-    # rosbag_recorder = launch.actions.ExecuteProcess(
-    #     cmd=[
-    #         'ros2', 'bag', 'record',
-    #         '-o', 'slam_recording_bag',
-    #         '/zed/left/gray/rect/image',
-    #         '/zed/right/gray/rect/image',
-    #         '/zed/left/gray/rect/camera_info',
-    #         '/zed/right/gray/rect/camera_info',
-    #         '/zed/imu/data',
-    #         '/clock',
-    #         '/visual_slam/tracking/vo_pose',
-    #         '/visual_slam/tracking/odometry',
-    #         '--use-sim-time',
-    #     ],
-    #     output='screen',
-    # )
-
     # Monitor SVO status; on EOF call get_all_poses then exit
     svo_monitor = launch.actions.ExecuteProcess(
         cmd=[
@@ -337,25 +320,12 @@ def generate_launch_description():
             default_value='True',
             description='Enable IMU fusion in Visual SLAM'),
         DeclareLaunchArgument(
-            #  from https://www.stereolabs.com/docs/isaac-ros/setting_up_isaac_ros:
-            # 📌 Note: When using the ZED ROS 2 Wrapper with NVIDIA® Isaac™ ROS, make sure to set the enable_ipc parameter to false in the launch file to avoid potential conflicts with the NITROS transport.
-            #  Read more in the ZED Isaac™ ROS Troubleshooting Guide and the NVIDIA® Isaac™ ROS Troubleshooting Documentation.
+            # Stereolabs recommends disabling IPC when the ZED wrapper runs
+            # alongside Isaac ROS, to avoid conflicts with the NITROS
+            # transport: https://www.stereolabs.com/docs/isaac-ros/setting_up_isaac_ros
             'enable_ipc',
-            default_value='False', 
+            default_value='False',
             description='Enable Intra-Process Communication (IPC).'),
         composable_nodes_container,
-        svo_monitor, # commented out for debbuging (manually stop the launch after SVO EOF with ctrl-c)
+        svo_monitor,
     ])
-
-
-# 'ros2', 'bag', 'record',
-#             '-o', 'slam_recording_bag',
-#             '/zed/left/gray/rect/image',
-#             '/zed/right/gray/rect/image',
-#             '/zed/left/gray/rect/camera_info',
-#             '/zed/right/gray/rect/camera_info',
-#             '/zed/imu/data',
-#             '/clock',
-#             '/visual_slam/tracking/vo_pose',
-#             '/visual_slam/tracking/odometry',
-#             '--use-sim-time',

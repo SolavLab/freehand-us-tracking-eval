@@ -263,7 +263,6 @@ class DirectRealSenseConverter:
         
         # Projection matrix P
         Tx = -intrinsics.fx * self.baseline if camera_index == 1 else 0.0 # 0 for left, -fx*baseline for right
-        # Tx = 0.0 # zero for both cameras - This is modified during launching isaac ros vslam! no need to adjust here!
         Ty = 0.0 # zero for both cameras
         camera_info.p = [
             intrinsics.fx, 0.0, intrinsics.ppx, Tx,
