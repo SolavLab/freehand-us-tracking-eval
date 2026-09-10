@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/ZoharOddes/us-tracking-release/schema/poses.schema.json",
+  "$id": "https://github.com/SolavLab/freehand-us-tracking-eval/blob/master/datasets/probe-tracking-2025-10-23/schema/poses.schema.json",
   "title": "Common pose-trajectory CSV",
   "description": "The single interchange format all three tracking pipelines are normalised to. One row per frame for which the pipeline reported a pose. This is the contract between the extraction stage (which runs under different interpreters, and in one case inside a container) and the evaluation package: extraction writes it, evaluation validates it on load, so a change in an extractor surfaces as a load-time error rather than as a silently different number.",
   "x-format": {
