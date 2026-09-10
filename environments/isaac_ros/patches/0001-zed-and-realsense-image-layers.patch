@@ -2,11 +2,14 @@ diff --git a/docker/Dockerfile.realsense b/docker/Dockerfile.realsense
 index 2c91710..9c8a5f7 100644
 --- a/docker/Dockerfile.realsense
 +++ b/docker/Dockerfile.realsense
-@@ -15,6 +15,21 @@ ARG LIBREALSENSE_SOURCE_VERSION=v2.55.1
+@@ -15,6 +15,24 @@ ARG LIBREALSENSE_SOURCE_VERSION=v2.55.1
  ARG REALSENSE_ROS_GIT_URL=https://github.com/NVIDIA-ISAAC-ROS/realsense-ros.git
  ARG REALSENSE_ROS_VERSION=release/4.51.1-isaac
  
-+# --- Isaac ROS APT repo (release-3.0) and keyring  <<<< this block from chatgpt to sort apt and apt-get issues---
++# Isaac ROS apt repository and GPG keyring, so this layer can install the
++# Isaac ROS NITROS packages the visual-SLAM node needs. Also allows a
++# Release-info change (Origin/Label/Suite) so an upstream repo metadata
++# change does not stop a non-interactive build.
 +ENV DEBIAN_FRONTEND=noninteractive
 +RUN set -eux; \
 +    mkdir -p /usr/share/keyrings; \

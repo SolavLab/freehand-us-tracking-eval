@@ -26,7 +26,6 @@ if [ -d "${ISAAC_ROS_WS}/src/zed-ros2-wrapper" ]; then
    echo "Building zed_wrapper..."
    source /opt/ros/humble/setup.bash
    cd ${ISAAC_ROS_WS}/ && source ${ISAAC_ROS_WS}/install/setup.bash 2>/dev/null || true
-   # sudo chown -R ${USERNAME}:${USERNAME} ${ISAAC_ROS_WS}/build ${ISAAC_ROS_WS}/install ${ISAAC_ROS_WS}/log 2>/dev/null || true
    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-up-to zed_wrapper
    # Setup the environment variables
    echo source $(pwd)/install/local_setup.bash >> ~/.bashrc

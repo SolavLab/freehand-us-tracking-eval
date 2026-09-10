@@ -63,7 +63,6 @@ if [ -d "${ISAAC_ROS_WS}/src/isaac_ros_visual_slam" ]; then
     colcon build --symlink-install --packages-up-to isaac_ros_visual_slam --base-paths ${ISAAC_ROS_WS}/src/isaac_ros_visual_slam/isaac_ros_visual_slam
     echo "✓ isaac_ros_visual_slam built successfully"
 fi
-echo $(whoami)
 
 echo "Sourcing the workspace..."
 source ${ISAAC_ROS_WS}/install/setup.bash

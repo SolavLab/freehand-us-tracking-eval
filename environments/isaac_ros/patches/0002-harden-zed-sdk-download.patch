@@ -26,7 +26,7 @@ hardening is visible as a deliberate, reviewable change.
 
 --- a/docker/scripts/install-zed-x86_64.sh
 +++ b/docker/scripts/install-zed-x86_64.sh
-@@
+@@ -9,11 +9,11 @@
  URL=https://download.stereolabs.com/zedsdk/5.1/cu12/ubuntu22
 -wget -q --no-check-certificate -O ZED_SDK_Linux.run ${URL}
 +wget -q -O ZED_SDK_Linux.run ${URL}
