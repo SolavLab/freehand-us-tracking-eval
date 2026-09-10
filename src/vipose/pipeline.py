@@ -41,6 +41,7 @@ from .sync.stages import crosscorrelation_offset, refine_offset_omega
 
 __all__ = [
     "CellResult",
+    "calibrate_pipeline",
     "evaluate_recording",
     "shared_window_from_offsets",
     "stage3_objective_curve",
@@ -96,10 +97,28 @@ def shared_window_from_offsets(
     return (float(start), float(end)), local
 
 
-def _calibrate(
+def calibrate_pipeline(
     track: Track, reference: MocapData, offset_ms: float, window_ms: tuple[float, float]
 ):
-    """Calibrate one pipeline at a given offset over a given window."""
+    """Synchronize, calibrate and measure one trajectory against a marker reference.
+
+    This is the whole per-recording algorithm in one call, and it has no
+    dependency on ``Dataset`` or any dataset manifest: ``track`` is any
+    pipeline's trajectory (:func:`vipose.io.tracks.load_track` or built by
+    hand), ``reference`` is a marker-cluster recording
+    (:func:`vipose.io.mocap.load_mocap` or built by hand), ``offset_ms`` is the
+    temporal offset between their clocks (see :mod:`vipose.sync.stages`), and
+    ``window_ms`` is the span, in the track's own relative clock, to evaluate
+    over.
+
+    Returns ``(residuals, calibration, resampled_reference, rigid_body_fit)``:
+    a :class:`~vipose.results.Residuals` series, the
+    :class:`~vipose.calibration.HandEyeResult`, the reference resampled onto
+    the track's timestamps, and the reference's own rigid-body fit
+    (:class:`~vipose.geometry.rigid_body.RigidBodyTrajectory`) over that
+    window. See ``docs/algorithms.md`` for a worked example that starts from
+    two plain trajectory files.
+    """
     cropped = track.cropped(*window_ms)
     resampled = resample_reference(reference, cropped.time_ms, offset_ms)
     rb = fit_rigid_body(resampled, min_markers=4)
@@ -121,7 +140,7 @@ def _calibrate(
 
 
 def _median_rotational_residual(track, reference, offset_ms, window_ms) -> float:
-    residuals, *_ = _calibrate(track, reference, offset_ms, window_ms)
+    residuals, *_ = calibrate_pipeline(track, reference, offset_ms, window_ms)
     return float(np.median(residuals.d_rot_deg))
 
 
@@ -259,7 +278,7 @@ def evaluate_recording(
 
     results = {}
     for pipeline, track in tracks.items():
-        residuals, calib, resampled, rb = _calibrate(
+        residuals, calib, resampled, rb = calibrate_pipeline(
             track, reference, offsets[pipeline], local_windows[pipeline]
         )
         results[pipeline] = CellResult(

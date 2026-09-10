@@ -54,15 +54,14 @@ image.
 ## Data
 
 The Vicon reference trajectories and the pipeline pose CSVs under `datasets/`
-were produced by the authors and are covered by the MIT licence above. If the
-raw archive is deposited separately, CC-BY-4.0 is worth considering for the data
-specifically, since MIT is written for software.
-
-The raw recordings (~20 GiB, see
-`datasets/probe-tracking-2025-10-23/raw.yaml`) are not in this repository and
-need an archival deposit with its own DOI and licence. Nothing in the paper's
-claims depends on them — every table and figure is reproducible from the CSVs
-that do ship — but the acquisition stages are not runnable without them.
+were produced by the authors and are covered by the MIT licence above. The
+raw recordings (~20 GiB, see `datasets/probe-tracking-2025-10-23/raw.yaml`)
+are too large for this repository and are planned for a separate Zenodo
+deposit with its own DOI; CC-BY-4.0 is worth considering for that deposit
+specifically, since MIT is written for software. Nothing in the paper's
+claims depends on the raw recordings — every table and figure is reproducible
+from the CSVs that do ship — but the acquisition stages are not runnable
+without them.
 
 ## Attribution note
 

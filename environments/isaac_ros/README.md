@@ -108,6 +108,3 @@ it is the reason they work.
   acquisition timestamps are preserved. This is to stop the visual-SLAM node
   dropping frames under load, and the paper reports it as a limitation for any
   real-time claim rather than as a tuning choice.
-- One comment in patch 0001 is a working note recording where a fix came from.
-  It is left in the patch because the patch is a record of what was run; it is
-  not reproduced in this README.

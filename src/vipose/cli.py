@@ -1,13 +1,13 @@
-"""Command line interface.
+"""Command line interface to the vipose evaluation.
 
-    vipose verify     check the dataset matches its manifest and the golden
-                      master is self-consistent
-    vipose evaluate   run synchronization, calibration and residuals from the
-                      shipped pose and mocap CSVs
-    vipose tables     regenerate the manuscript's tables from a result store
+    vipose verify     check a dataset matches its manifest, and summarise any
+                      golden master alongside it
+    vipose evaluate   run synchronization, calibration and residuals for every
+                      recording in a dataset
+    vipose tables     write summary tables from a result store
+    vipose figures    write diagnostic figures from a result store
 
-Later commits add ``figures``. This is the only module permitted to configure
-matplotlib.
+This is the only module permitted to configure matplotlib.
 """
 
 from __future__ import annotations
@@ -107,7 +107,7 @@ def _cmd_tables(args: argparse.Namespace) -> int:
     print(f"  motion: {len(motion['rows'])} recordings")
     print(
         f"  {len(table['rows'])} rows, "
-        f"pipelines in manuscript order: {', '.join(PIPELINE_ORDER)}"
+        f"pipeline order: {', '.join(PIPELINE_ORDER)}"
     )
     return 0
 
@@ -147,12 +147,12 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--no-hashes", action="store_true")
     e.set_defaults(func=_cmd_evaluate)
 
-    t = sub.add_parser("tables", help="regenerate the manuscript's tables")
+    t = sub.add_parser("tables", help="write summary tables from a result store")
     t.add_argument("--store", default=DEFAULT_GOLDEN, help="result store or golden master")
     t.add_argument("--out", default="tables", help="output directory")
     t.set_defaults(func=_cmd_tables)
 
-    f = sub.add_parser("figures", help="regenerate the manuscript's figures")
+    f = sub.add_parser("figures", help="write diagnostic figures from a result store")
     f.add_argument("--store", default=DEFAULT_GOLDEN, help="result store or golden master")
     f.add_argument("--out", default="figures", help="output directory")
     f.set_defaults(func=_cmd_figures)

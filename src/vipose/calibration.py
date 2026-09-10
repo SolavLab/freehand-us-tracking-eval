@@ -18,8 +18,10 @@ robot-world/hand-eye problem.
    ``A Z = X B``, and returns the pair ``(Z, X)``. In this project's notation
    that is ``T_C_W(t) . T_W_V = T_C_M . T_M_V(t)``, so the arguments are the
    *inverses* of the trajectories above. Assuming ``A X = Z B`` instead yields a
-   calibration roughly 106 degrees wrong. ``tests/test_opencv_convention.py``
-   pins this empirically against six candidate laws.
+   calibration roughly 106 degrees wrong.
+   ``tests/test_conditioning.py::test_opencv_hand_eye_convention`` pins this
+   empirically against six candidate laws, and ``docs/algorithms.md`` walks
+   through it.
 """
 
 from __future__ import annotations
@@ -41,11 +43,11 @@ __all__ = ["HandEyeResult", "MarkerFrame", "solve_hand_eye", "marker_frame", "SH
 
 log = logging.getLogger(__name__)
 
-#: Shah's method. Chosen because it is the one the published results used, and
-#: because its well-posedness is measurable on the matrix it factorises -- see
-#: ``vipose.conditioning``. Selecting a method by the residual it produces would
-#: be fitting to the reported metric; ``docs/method-selection.md`` records the
-#: comparison that was made.
+#: Shah's method. Chosen because its well-posedness is measurable directly on
+#: the matrix it factorises -- see ``vipose.conditioning`` -- and because it is
+#: the one the results shipped with this repository used. Selecting a method by
+#: the residual it happens to produce would be fitting to the reported metric;
+#: ``docs/algorithms.md`` records the comparison against the alternatives.
 SHAH = cv2.CALIB_ROBOT_WORLD_HAND_EYE_SHAH
 
 

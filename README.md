@@ -1,12 +1,18 @@
-# Visual–inertial pose tracking for freehand 3D-ultrasound probe localization
+# vipose — visual–inertial pose tracking evaluation
 
-Code and reference data for:
+`vipose` compares a camera's estimated trajectory against a motion-capture
+reference: it synchronizes the two clocks, calibrates the constant transform
+between the camera and the reference rig, and reports the per-frame
+translational and rotational residual. The algorithms are plain functions
+over numpy arrays — see [`docs/algorithms.md`](docs/algorithms.md) if you
+want to call them directly against your own trajectories — with a CLI on top
+for running the whole thing over a directory of recordings.
+
+It was built to compare three real-time pose-tracking pipelines against an
+eleven-camera Vicon reference, for the paper this repository accompanies:
 
 > Z. Oddes and D. Solav, *Accuracy of inside-out visual–inertial tracking
 > pipelines for freehand 3D ultrasound probe localization*.
-
-Three complete pose-tracking pipelines were compared against an eleven-camera
-Vicon motion-capture reference, under identical physical conditions:
 
 | Pipeline | Camera | Platform | Localization |
 |---|---|---|---|
@@ -14,96 +20,66 @@ Vicon motion-capture reference, under identical physical conditions:
 | `zed-cuvslam` | ZED X Mini | workstation | cuVSLAM 3.2 (Isaac ROS) |
 | `rs-cuvslam` | RealSense D455 | workstation | cuVSLAM 3.2 (Isaac ROS) |
 
-Both cameras and a five-marker infrared cluster were mounted on one rigid frame,
-so all three pipelines saw the same motion, scene and lighting. Four recordings
-cover three motion conditions, with the pivot condition acquired twice to
-measure trial-to-trial variability.
+Both cameras and a five-marker infrared cluster were mounted on one rigid
+frame, so all three pipelines saw the same motion, scene and lighting. The raw
+recordings themselves (SVO2 and `.bag` files, several GB per recording) are
+not in this repository, but the extracted pose and marker-trajectory CSVs for
+four recordings ship here (~15 MiB total) as example data — enough to run the
+whole workflow without acquiring or extracting anything yourself.
 
-## Reproduce the paper
-
-Every number, table and figure in the manuscript is reproducible from this
-repository alone — the raw recordings are not needed.
+## Quickstart
 
 ```bash
 python3.10 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
 
-vipose verify            # 16 input files checked against their sha256
-pytest tests/ -v         # golden master and manuscript checks
-vipose evaluate          # synchronization, calibration, residuals  (~30 min)
-vipose tables            # -> tables/residuals.tex
+vipose verify             # check the example dataset against its manifest
+vipose evaluate            # synchronize, calibrate, measure -- a few minutes
+vipose tables               # summary tables from the run just written
+cat results/*/cells/zed-sdk/pivot/cell.json
 ```
 
-`vipose tables` regenerates the manuscript's tables and `vipose figures` its
-appendix figures. Table 2 and Table 3 come out character-for-character identical
-to the paper. `docs/paper_map.md` maps every published number to the command
-that produces it, and is explicit about the three that do not yet regenerate.
+That runs the full workflow on the shipped example recordings. Point
+`--dataset` at a directory built from your own recordings to run it on those
+instead — see [`docs/usage.md`](docs/usage.md) for the CLI, and
+[`docs/data_formats.md`](docs/data_formats.md#4-authoring-your-own-recording)
+for what a dataset directory needs to contain.
 
 ## What is here
 
 ```
-datasets/probe-tracking-2025-10-23/   16 input files, 15 MiB
+datasets/probe-tracking-2025-10-23/   the shipped example: 16 input files, 15 MiB
   reference/<recording>/mocap.csv     Vicon marker trajectories, 240 Hz
   tracking/<pipeline>/<recording>/    per-pipeline pose CSVs
   dataset.yaml                        the manifest: ids, hashes, provenance
   schema/poses.schema.json            the pose-CSV contract
-  raw.yaml                            catalogue of the ~20 GiB raw archive
-src/vipose/                           the evaluation package
-extract/                              acquisition-side code (see below)
+  raw.yaml                            catalogue of the ~20 GiB raw archive (too large for GitHub; planned for a Zenodo deposit)
+src/vipose/                           the library and CLI
+extract/                              acquisition-side code: raw recordings -> pose CSVs
 environments/isaac_ros/               pinned upstream + patches for cuVSLAM
-tests/golden/                         the published per-frame residuals
-tests/tools/                          the provenance harness (see below)
-docs/                                 setup, usage, data formats, licensing
+tests/golden/                         the published per-frame residuals, for regression checks
+tests/tools/                          the provenance harness (see docs/reproduction/)
+docs/                                 algorithms, usage, data formats, setup, licensing
 ```
 
-Recordings are addressed by condition — `pivot`, `mixed`, `freehand`,
-`pivot-repeat` — and pipelines by name. `dataset.yaml` records the `test1`..`test5`
-identifiers the original analysis used, so results published before this release
-remain traceable. It also records the fifth recording that was acquired and
-excluded, with the reason.
+## Documentation
 
-## How the numbers were checked
-
-`tests/golden/` holds the per-frame residual series for all twelve
-pipeline × recording cells, as published. It was not taken on trust: the original
-code was re-run and compared against the artifacts that produced the paper at
-four tolerance tiers — frame counts and columns exact, per-frame residuals
-elementwise, fitted transforms to 1e-9, temporal offsets to 1e-6 ms.
-
-All twelve cells reproduced with a **maximum per-frame difference of exactly
-zero**, and all seventy-two published statistics round-trip. `tests/tools/` holds
-that harness, preserved as it was run, so the claim is auditable rather than
-asserted.
-
-`pytest` re-checks a fresh evaluation against that reference elementwise, which
-is stronger than comparing medians: a median can survive substantial
-rearrangement of the series beneath it.
-
-## Reproduction ladder
-
-| Rung | Regenerates | Needs |
-|---|---|---|
-| **R1** | tables and figures | this repository, Python 3.10 |
-| **R2** | the full evaluation | as above, ~30 min |
-| **R3** | pose estimation from raw recordings | vendor SDKs and the ~20 GiB archive |
-
-Most readers need only R1 and R2. R3 exists so the acquisition path is
-inspectable and re-runnable, not so it can be replayed to identical output:
-cuVSLAM and the ZED SDK both run on the GPU and are not bit-deterministic. Pose
-estimation reproduces to within the trial-to-trial variability the paper itself
-reports (0.05–0.94 mm, 0.019–0.037°).
-
-`docs/setup.md` covers the four environments R3 requires, and why they cannot be
-combined.
+- **[`docs/algorithms.md`](docs/algorithms.md)** — the synchronization,
+  calibration and metrics functions as a library, with signatures and a
+  worked example against a plain trajectory and mocap file.
+- **[`docs/usage.md`](docs/usage.md)** — the `vipose` CLI: verify a dataset,
+  run an evaluation, read the results.
+- **[`docs/data_formats.md`](docs/data_formats.md)** — every file format
+  involved, and what your own recording needs to look like.
+- **[`docs/setup.md`](docs/setup.md)** — installing `vipose`.
+- **[`docs/licensing.md`](docs/licensing.md)** — why no third-party source is
+  redistributed here, and what that means for reuse.
+- **[`docs/reproduction/`](docs/reproduction/README.md)** — how this
+  repository's own numbers were produced and checked against the manuscript.
+  Not needed to use `vipose`; useful if you're reviewing the paper or
+  auditing the shipped results.
 
 ## Implementation
-
-`src/vipose/` is a complete reimplementation — about 2,200 lines across twenty
-modules, replacing roughly 4,700 lines of the original four. Each module was
-ported against the code it replaced and checked elementwise before the original
-was removed, and the resulting pipeline reproduces the published per-frame
-residuals to 1.4e-08 mm and 2.5e-09 degrees. `docs/porting-notes.md` records
-what changed and what was deliberately preserved.
 
 ```
 recordings.py    the dataset manifest; Dataset and Cell
@@ -111,25 +87,26 @@ io/mocap.py      Vicon Nexus export -> MocapData
 io/tracks.py     pose CSV -> Track, schema-validated
 geometry/        SE(3) helpers, and the Kabsch marker-cluster fit
 kinematics.py    rotational increments and geodesic angular speed
-sync/            stages 1 and 2, reference resampling
+sync/            temporal synchronization stages, reference resampling
 calibration.py   robot-world/hand-eye (Shah), marker-intrinsic frame
+conditioning.py  well-posedness of the hand-eye solve
 metrics.py       residuals and summary statistics -- pure, no plotting
-pipeline.py      orchestration, including stage 3 and the fixed-point loop
-report/          tables
+pipeline.py      the per-recording driver: synchronize, crop, calibrate, measure
+report/          tables and figures, built for this manuscript's structure
 evaluate.py      result-store writer and the per-recording driver
 cli.py           the `vipose` command
 ```
 
-Nothing outside `report/` imports pyplot. In the original, the residual values
-were returned *by* the plotting functions, so results could not be computed
-without drawing figures — which is why a matplotlib error could destroy a
-twelve-cell run and why the figures leaked until the process ran out of memory.
+Nothing outside `report/` imports pyplot, so results never depend on drawing
+a figure.
 
 ## Licence
 
-MIT, see [`LICENSE`](LICENSE). `docs/licensing.md` explains why no
-third-party source is redistributed, and what still needs attention before publication.
+MIT, see [`LICENSE`](LICENSE). [`docs/licensing.md`](docs/licensing.md)
+explains why no third-party source is redistributed, and what that means if
+you build on this.
 
 ## Citation
 
-`CITATION.cff` — pending a DOI for the raw archive.
+See the manuscript citation above. Machine-readable citation metadata
+(`CITATION.cff`) will be added once the raw-recording archive has a DOI.
