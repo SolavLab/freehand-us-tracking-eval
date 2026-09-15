@@ -27,6 +27,8 @@ not in this repository, but the extracted pose and marker-trajectory CSVs for
 four recordings ship here (~15 MiB total) as example data — enough to run the
 whole workflow without acquiring or extracting anything yourself.
 
+The complete raw-recording archive is published on Zenodo [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22690904.svg)](https://doi.org/10.5281/zenodo.22690904).
+
 ## Quickstart
 
 ```bash
@@ -108,7 +110,5 @@ you build on this.
 
 ## Citation
 
-See the manuscript citation above. 
-The raw-recording archive is published on Zenodo [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22690904.svg)](https://doi.org/10.5281/zenodo.22690904).
-
-
+> Z. Oddes and D. Solav, *Accuracy of inside-out visual–inertial tracking
+> pipelines for freehand 3D ultrasound probe localization*.
