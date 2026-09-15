@@ -53,7 +53,7 @@ datasets/probe-tracking-2025-10-23/   the shipped example: 16 input files, 15 Mi
   tracking/<pipeline>/<recording>/    per-pipeline pose CSVs
   dataset.yaml                        the manifest: ids, hashes, provenance
   schema/poses.schema.json            the pose-CSV contract
-  raw.yaml                            catalogue of the ~20 GiB raw archive (too large for GitHub; planned for a Zenodo deposit)
+  raw.yaml                            catalogue of the ~20 GiB raw archive (too large for GitHub; planned for a Zenodo deposit, DOI 10.5281/zenodo.22690903)
 src/vipose/                           the library and CLI
 extract/                              acquisition-side code: raw recordings -> pose CSVs
 environments/isaac_ros/               pinned upstream + patches for cuVSLAM
@@ -108,5 +108,7 @@ you build on this.
 
 ## Citation
 
-See the manuscript citation above. Machine-readable citation metadata
-(`CITATION.cff`) will be added once the raw-recording archive has a DOI.
+See the manuscript citation above. The raw-recording archive is reserved at
+DOI [10.5281/zenodo.22690903](https://doi.org/10.5281/zenodo.22690903),
+pending publication. Machine-readable citation metadata (`CITATION.cff`) will
+be added once it is live.

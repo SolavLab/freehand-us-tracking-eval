@@ -10,6 +10,7 @@
 # point at a directory laid out as <root>/<recording>/<file>.
 
 root_env: VIPOSE_RAW_ROOT
+doi: 10.5281/zenodo.22690903   # reserved; not yet published
 sha256: pending          # to be filled in when the archive is deposited
 recordings:
   pivot:

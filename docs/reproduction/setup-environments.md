@@ -18,7 +18,8 @@ checking how thoroughly the manuscript's numbers were reproduced.
 **R1 and R2 are what the manuscript's claims rest on, and they need nothing
 but the `vipose` install.** R3 needs the ~20 GiB raw archive (catalogued in
 `datasets/probe-tracking-2025-10-23/raw.yaml`; too large for this repository,
-planned for a separate Zenodo deposit) and vendor SDKs, and is not
+planned for a separate Zenodo deposit at DOI 10.5281/zenodo.22690903) and
+vendor SDKs, and is not
 bit-reproducible — cuVSLAM and the ZED SDK both run on the GPU and are not
 deterministic. R3 exists so the acquisition path is inspectable and
 re-runnable, not so it can be replayed to identical output; see

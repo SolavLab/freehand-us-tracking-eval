@@ -182,7 +182,8 @@ To point `vipose` at a new recording rather than the shipped example:
 The SVO2 and `.bag` files behind the shipped example dataset are catalogued
 in `datasets/probe-tracking-2025-10-23/raw.yaml`; ~16 GiB across the four
 sessions, several GB per recording — too large for this repository, and
-planned for a separate Zenodo deposit. Resolved at runtime from
+planned for a separate Zenodo deposit at DOI 10.5281/zenodo.22690903.
+Resolved at runtime from
 `$VIPOSE_RAW_ROOT`. Regenerating pose CSVs from these is covered in
 [extract/README.md](../extract/README.md); it is not needed to use `vipose`
 on data you already have as pose/mocap CSVs.
