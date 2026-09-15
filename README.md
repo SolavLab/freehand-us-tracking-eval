@@ -1,7 +1,5 @@
 # vipose — visual–inertial pose tracking evaluation
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22690904.svg)](https://doi.org/10.5281/zenodo.22690904)
-
 `vipose` compares a camera's estimated trajectory against a motion-capture
 reference: it synchronizes the two clocks, calibrates the constant transform
 between the camera and the reference rig, and reports the per-frame
@@ -110,8 +108,9 @@ you build on this.
 
 ## Citation
 
-See the manuscript citation above. The raw-recording archive is published at
-DOI [10.5281/zenodo.22690904](https://doi.org/10.5281/zenodo.22690904), and
-the code release at DOI
-[10.5281/zenodo.22769948](https://doi.org/10.5281/zenodo.22769948).
+See the manuscript citation above. The raw-recording archive is published on
+Zenodo, DOI 10.5281/zenodo.22690904 (badge below), and the code release at
+DOI [10.5281/zenodo.22769948](https://doi.org/10.5281/zenodo.22769948).
 Machine-readable citation metadata (`CITATION.cff`) will be added next.
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22690904.svg)](https://doi.org/10.5281/zenodo.22690904)
