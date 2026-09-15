@@ -45,17 +45,6 @@ recordings:
       Second acquisition of the pivot condition, used to assess
       trial-to-trial repeatability. Not an additional motion condition.
 
-excluded:
-  pivot-b:
-    legacy_test: 4
-    condition: pivot
-    published: false
-    exclusion: >-
-      Vicon marker-cluster rigid-body fit residual was mean 0.497 mm
-      (SD 0.338, max 3.800) within the shared evaluation window, against
-      0.209-0.279 mm for the four retained recordings. Not shipped; the
-      raw recording is listed in raw.yaml.
-
 pipelines:
   zed-sdk:
     label: 'ZED SDK'

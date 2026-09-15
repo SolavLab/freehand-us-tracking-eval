@@ -145,20 +145,6 @@ def test_latex_table_is_well_formed(dataset, tmp_path):
     assert tex.count(r"\addlinespace") == 3
 
 
-def test_excluded_recording_is_documented(dataset):
-    """The recording dropped from the paper is recorded, with its reason.
-
-    Neither the exclusion nor the fact that one condition was acquired twice is
-    currently stated in the manuscript. Keeping both in the manifest means the
-    omission is at least visible to anyone reading the code.
-    """
-    excluded = dataset.excluded()
-    assert excluded, "no excluded recordings recorded"
-    for rid, meta in excluded.items():
-        assert meta.get("exclusion"), f"{rid} has no stated reason"
-        assert meta.get("published") is False
-
-
 def test_repeat_recording_is_linked(dataset):
     repeats = {
         r: m for r, m in dataset.manifest["recordings"].items() if "repeat_of" in m

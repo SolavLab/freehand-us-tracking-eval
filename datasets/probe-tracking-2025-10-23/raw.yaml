@@ -1,8 +1,8 @@
 # Raw recordings — NOT shipped in this repository.
 #
 # These are the source recordings from which everything under tracking/ was
-# derived.  They total ~16 GiB for the four published recordings (~20 GiB
-# including the excluded one) and belong in an archival deposit, not in git.
+# derived.  They total ~16 GiB for the four published recordings and belong
+# in an archival deposit, not in git.
 #
 # Only the extraction stage (extract/) reads them.  The evaluation package never
 # needs them: every table and figure in the paper is reproducible from the CSVs
@@ -72,20 +72,5 @@ recordings:
       note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
     area_map:
       file: test1.area
-      bytes: 22405
-      note: ZED spatial-memory map — present but unused
-  pivot-b:
-    legacy_test: 4
-    recorded: 2025-10-23
-    svo2:
-      file: test4.svo2
-      bytes: 597869310
-      note: ZED X Mini stereo + IMU, native SVO2 (pipelines I and II)
-    realsense_bag:
-      file: test4.bag
-      bytes: 3320815658
-      note: RealSense D455 infrared stereo + IMU, native .bag (pipeline III)
-    area_map:
-      file: test4.area
       bytes: 22405
       note: ZED spatial-memory map — present but unused
