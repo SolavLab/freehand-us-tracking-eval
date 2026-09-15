@@ -62,10 +62,3 @@ specifically, since MIT is written for software. Nothing in the paper's
 claims depends on the raw recordings — every table and figure is reproducible
 from the CSVs that do ship — but the acquisition stages are not runnable
 without them.
-
-## Attribution note
-
-One README in the original tree recorded a debugging session as
-"Original source: ChatGPT-assisted debugging". That is fine as a working note
-and out of place in a published artifact; the file is reworded to describe what
-the configuration does and why.
