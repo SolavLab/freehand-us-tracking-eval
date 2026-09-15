@@ -180,7 +180,7 @@ To point `vipose` at a new recording rather than the shipped example:
 ## 5. Raw recordings — not in this repository
 
 The SVO2 and `.bag` files behind the shipped example dataset are catalogued
-in `datasets/probe-tracking-2025-10-23/raw.yaml`; ~20 GiB across the five
+in `datasets/probe-tracking-2025-10-23/raw.yaml`; ~16 GiB across the four
 sessions, several GB per recording — too large for this repository, and
 planned for a separate Zenodo deposit. Resolved at runtime from
 `$VIPOSE_RAW_ROOT`. Regenerating pose CSVs from these is covered in
@@ -191,7 +191,6 @@ on data you already have as pose/mocap CSVs.
 |---|---|---|
 | ZED stereo + IMU | `.svo2`, 1920×1200 @ 60 Hz, IMU 400 Hz | `zed-sdk`, `zed-cuvslam` |
 | RealSense IR stereo + IMU | `.bag`, 1280×800 mono8 @ 30 Hz, IMU 400 Hz | `rs-cuvslam` |
-| ZED spatial-memory map | `.area` | not consumed — listed for completeness |
 
 ### Intermediate: converted ROS 2 bags
 
