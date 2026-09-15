@@ -1,5 +1,7 @@
 # vipose — visual–inertial pose tracking evaluation
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22690904.svg)](https://doi.org/10.5281/zenodo.22690904)
+
 `vipose` compares a camera's estimated trajectory against a motion-capture
 reference: it synchronizes the two clocks, calibrates the constant transform
 between the camera and the reference rig, and reports the per-frame
@@ -53,7 +55,7 @@ datasets/probe-tracking-2025-10-23/   the shipped example: 16 input files, 15 Mi
   tracking/<pipeline>/<recording>/    per-pipeline pose CSVs
   dataset.yaml                        the manifest: ids, hashes, provenance
   schema/poses.schema.json            the pose-CSV contract
-  raw.yaml                            catalogue of the ~20 GiB raw archive (too large for GitHub; planned for a Zenodo deposit, DOI 10.5281/zenodo.22690903)
+  raw.yaml                            catalogue of the ~20 GiB raw archive (too large for GitHub; on Zenodo, DOI 10.5281/zenodo.22690904)
 src/vipose/                           the library and CLI
 extract/                              acquisition-side code: raw recordings -> pose CSVs
 environments/isaac_ros/               pinned upstream + patches for cuVSLAM
@@ -108,7 +110,8 @@ you build on this.
 
 ## Citation
 
-See the manuscript citation above. The raw-recording archive is reserved at
-DOI [10.5281/zenodo.22690903](https://doi.org/10.5281/zenodo.22690903),
-pending publication. Machine-readable citation metadata (`CITATION.cff`) will
-be added once it is live.
+See the manuscript citation above. The raw-recording archive is published at
+DOI [10.5281/zenodo.22690904](https://doi.org/10.5281/zenodo.22690904), and
+the code release at DOI
+[10.5281/zenodo.22769948](https://doi.org/10.5281/zenodo.22769948).
+Machine-readable citation metadata (`CITATION.cff`) will be added next.
