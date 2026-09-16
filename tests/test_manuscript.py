@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from vipose import Dataset
@@ -248,3 +249,96 @@ def test_motion_latex_matches_the_manuscript(dataset, tmp_path):
     for line in rows:
         assert line.count("&") == 8, f"expected 9 columns: {line}"
     assert tex.count(r"\addlinespace") == 1
+
+
+# --------------------------------------------------------------------------
+# Appendix A -- precision of the reported medians
+# --------------------------------------------------------------------------
+
+# Appendix A quotes correlation times of 0.7--2.9 s for the per-frame
+# rotational residual and an effective sample size of 16--92, and the
+# discussion puts the resulting standard error of a median at
+# 0.008--0.026 deg. All three are stated over the nine cells of the three
+# motion conditions: the pivot repeat is excluded from the ranges, as it is
+# from the comparisons they support, and including it would take the minimum
+# effective sample size to 15.
+# The correlation-time endpoints are 0.649 and 2.901 s. The appendix first
+# printed "0.7--2.9", which is 0.649 rounded twice -- to 0.65 and then to 0.7 --
+# and was corrected to 0.65--2.90 once this was ported.
+APPENDIX_A_CORRELATION_TIME_S = (0.65, 2.90)
+APPENDIX_A_EFFECTIVE_SAMPLES = (16, 92)
+DISCUSSION_MEDIAN_SE_DEG = (0.008, 0.026)
+
+CONDITIONS = ("pivot", "mixed", "freehand")
+
+
+@pytest.fixture(scope="module")
+def precision(dataset) -> dict:
+    """Correlation time, effective sample size and median standard error per cell."""
+    from vipose.metrics import correlation_time, effective_sample_size, median_standard_error
+
+    out = {}
+    for pipeline in dataset.pipelines:
+        for recording in CONDITIONS:
+            r = read_residuals(GOLDEN / pipeline / recording / "residuals.csv")
+            t = r.time_ms / 1000.0
+            dt = float(np.median(np.diff(t)))
+            out[(pipeline, recording)] = (
+                correlation_time(r.d_rot_deg, dt),
+                effective_sample_size(r.d_rot_deg, t),
+                median_standard_error(r.d_rot_deg, t),
+            )
+    return out
+
+
+def test_correlation_times_match_appendix_a(precision):
+    """The rotational residuals span the correlation times Appendix A reports."""
+    taus = [v[0] for v in precision.values()]
+    lo, hi = APPENDIX_A_CORRELATION_TIME_S
+    assert round(min(taus), 2) == lo, (
+        f"shortest correlation time {min(taus):.3f} s, appendix says {lo}"
+    )
+    assert round(max(taus), 2) == hi, (
+        f"longest correlation time {max(taus):.3f} s, appendix says {hi}"
+    )
+
+
+def test_effective_sample_sizes_match_appendix_a(precision, dataset):
+    """16--92 independent samples, against 1400--3600 frames actually evaluated."""
+    neff = [v[1] for v in precision.values()]
+    lo, hi = APPENDIX_A_EFFECTIVE_SAMPLES
+    assert round(min(neff)) == lo, (
+        f"smallest effective sample size {min(neff):.1f}, appendix says {lo}"
+    )
+    assert round(max(neff)) == hi, (
+        f"largest effective sample size {max(neff):.1f}, appendix says {hi}"
+    )
+
+    frames = [
+        read_residuals(GOLDEN / p / r / "residuals.csv").d_rot_deg.size
+        for p in dataset.pipelines
+        for r in CONDITIONS
+    ]
+    assert 1400 <= min(frames) and max(frames) <= 3600, (
+        f"frame counts {min(frames)}--{max(frames)}, appendix says 1400--3600"
+    )
+
+
+def test_median_standard_errors_match_the_discussion(precision):
+    """0.008--0.026 deg, the basis of the 0.05 deg resolution limit."""
+    ses = [v[2] for v in precision.values()]
+    lo, hi = DISCUSSION_MEDIAN_SE_DEG
+    assert round(min(ses), 3) == lo, (
+        f"smallest standard error {min(ses):.4f} deg, discussion says {lo}"
+    )
+    assert round(max(ses), 3) == hi, (
+        f"largest standard error {max(ses):.4f} deg, discussion says {hi}"
+    )
+
+
+def test_resolution_limit_is_twice_the_largest_standard_error(precision):
+    """The discussion's 0.05 deg limit, as it is derived there."""
+    largest = max(v[2] for v in precision.values())
+    assert round(2 * largest, 2) == 0.05, (
+        f"twice the largest standard error is {2 * largest:.4f} deg, discussion says 0.05"
+    )

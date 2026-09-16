@@ -65,11 +65,14 @@ components with the previous row.
 `*_angles.csv` / `*_distances.csv` layout. Porting it is straightforward — the
 data is `tables/residuals.json` — but it has not been done.
 
-**Two claims have no generator here.** The residual autocorrelation time
-(τ = 0.7–2.9 s) and effective sample size (N_eff = 16–92) in Appendix A come
-from an investigation script that has not been ported. The numbers are recorded
-in the manuscript and were verified when written, but this repository does not
-regenerate them.
+**The Appendix A precision claims are generated here** as of this commit.
+`vipose.metrics.correlation_time`, `effective_sample_size` and
+`median_standard_error` compute the residual correlation time, the effective
+sample size and the standard error of a median; `tests/test_manuscript.py`
+asserts them against the published ranges over the nine cells of the three
+motion conditions. The correlation-time endpoints come out at 0.649 and
+2.901 s; porting this is what showed the appendix's original "0.7--2.9" to be
+0.649 rounded twice, and the manuscript now prints 0.65--2.90.
 
 ## What is checked automatically
 

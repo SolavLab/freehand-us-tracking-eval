@@ -157,6 +157,23 @@ rotational_residual(a, b) -> np.ndarray       # deg, angle of the relative rotat
 summarize(values) -> Summary                  # n, median, iqr, p95, mean, sd, maximum
 ```
 
+How precisely those statistics are determined is a separate question, and one
+the frame count answers badly: successive frames sample almost the same
+tracking state, so a residual series carries far less information than its
+length suggests.
+
+```python
+correlation_time(values, dt_s) -> float           # s, integrated autocorrelation time
+effective_sample_size(values, times_s) -> float   # independent samples, = duration / tau
+median_standard_error(values, times_s) -> float   # same units as `values`
+```
+
+For this dataset's rotational residuals that is 16–92 independent samples
+against 1400–3600 frames, and a standard error on each median of
+0.008–0.026°. Use it to decide which differences between two series are worth
+interpreting: below roughly twice the larger standard error, a gap between
+medians is not resolved.
+
 `rotational_residual` deliberately goes through `Rotation.from_matrix(...).magnitude()`
 rather than `arccos((tr R − 1) / 2)`: the two agree analytically, but arccos of
 the trace loses precision near zero rotation, which matters when residuals are

@@ -26,7 +26,16 @@ from .geometry.transforms import (
     to_matrices,
 )
 from .kinematics import angular_speed, rotational_increments
-from .metrics import Summary, percentile, rotational_residual, summarize, translational_residual
+from .metrics import (
+    Summary,
+    correlation_time,
+    effective_sample_size,
+    median_standard_error,
+    percentile,
+    rotational_residual,
+    summarize,
+    translational_residual,
+)
 from .pipeline import calibrate_pipeline
 from .recordings import Cell, Dataset, DatasetError
 from .sync.resample import resample_reference
@@ -68,4 +77,8 @@ __all__ = [
     "percentile",
     "translational_residual",
     "rotational_residual",
+    # precision of a statistic of an autocorrelated series
+    "correlation_time",
+    "effective_sample_size",
+    "median_standard_error",
 ]
