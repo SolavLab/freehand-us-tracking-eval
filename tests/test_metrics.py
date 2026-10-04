@@ -12,7 +12,12 @@ import numpy as np
 import pytest
 from scipy.signal import lfilter
 
-from vipose.metrics import correlation_time, effective_sample_size, median_standard_error
+from vipose.metrics import (
+    bootstrap_standard_error,
+    correlation_time,
+    effective_sample_size,
+    median_standard_error,
+)
 
 DT = 1 / 60.0
 
@@ -134,3 +139,73 @@ def test_rejects_a_nonsensical_sampling_interval(dt):
 def test_effective_sample_size_rejects_mismatched_times():
     with pytest.raises(ValueError, match="shape mismatch"):
         effective_sample_size(np.zeros(10), np.zeros(9))
+
+
+# --------------------------------------------------------------------------
+# Moving-block bootstrap
+# --------------------------------------------------------------------------
+
+
+def times_for(x):
+    return np.arange(x.size) * DT
+
+
+def test_bootstrap_is_reproducible_from_its_seed():
+    x = ar1(0.9, n=20_000)
+    t = times_for(x)
+    a = bootstrap_standard_error(x, t, replicates=500, seed=7)
+    b = bootstrap_standard_error(x, t, replicates=500, seed=7)
+    c = bootstrap_standard_error(x, t, replicates=500, seed=8)
+    assert a == b
+    assert a != c
+
+
+def test_bootstrap_does_not_depend_on_chunk_size():
+    """Chunking bounds memory; it must not touch the answer."""
+    x = ar1(0.9, n=20_000)
+    t = times_for(x)
+    assert bootstrap_standard_error(x, t, replicates=400, seed=1, chunk=400) == (
+        bootstrap_standard_error(x, t, replicates=400, seed=1, chunk=50)
+    )
+
+
+def test_bootstrap_matches_the_textbook_result_for_white_noise():
+    """With no correlation, the median's standard error is the classical one."""
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=20_000)
+    expected = np.sqrt(np.pi / 2) * x.std(ddof=1) / np.sqrt(x.size)
+    got = bootstrap_standard_error(x, times_for(x), replicates=2000, seed=0)
+    assert got == pytest.approx(expected, rel=0.15)
+
+
+def test_bootstrap_exceeds_the_white_noise_result_when_correlated():
+    """Correlation is what the block structure is there to carry."""
+    x = ar1(0.95, n=20_000)
+    naive = np.sqrt(np.pi / 2) * x.std(ddof=1) / np.sqrt(x.size)
+    assert bootstrap_standard_error(x, times_for(x), replicates=2000, seed=0) > 3 * naive
+
+
+def test_bootstrap_accepts_any_statistic():
+    """A tail is estimated less precisely than a centre."""
+    x = ar1(0.9, n=20_000)
+    t = times_for(x)
+    median = bootstrap_standard_error(x, t, replicates=2000, seed=0)
+    p95 = bootstrap_standard_error(
+        x, t, lambda a, axis: np.percentile(a, 95, axis=axis), replicates=2000, seed=0
+    )
+    assert p95 > median
+
+
+def test_bootstrap_rejects_a_series_shorter_than_its_block():
+    """A block that does not fit is a refusal, not a silently truncated block."""
+    x = ar1(0.9, n=500)
+    with pytest.raises(ValueError, match="too short for its correlation time"):
+        bootstrap_standard_error(x, times_for(x), replicates=100, seed=0, block_multiple=500)
+
+
+def test_bootstrap_rejects_mismatched_times_and_too_few_replicates():
+    x = ar1(0.9, n=5000)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        bootstrap_standard_error(x, times_for(x)[:-1], replicates=100)
+    with pytest.raises(ValueError, match="at least two replicates"):
+        bootstrap_standard_error(x, times_for(x), replicates=1)

@@ -166,7 +166,15 @@ length suggests.
 correlation_time(values, dt_s) -> float           # s, integrated autocorrelation time
 effective_sample_size(values, times_s) -> float   # independent samples, = duration / tau
 median_standard_error(values, times_s) -> float   # same units as `values`
+bootstrap_standard_error(values, times_s, statistic=np.median, *, seed=0) -> float
 ```
+
+`median_standard_error` is the asymptotic formula and applies to a median only.
+`bootstrap_standard_error` is the general tool: a moving-block bootstrap that
+takes any statistic — pass `lambda a, axis: np.percentile(a, 95, axis=axis)`
+for a tail — and makes no assumption about the shape of its sampling
+distribution. Seed it per series; sharing one generator across series would
+make each result depend on the order they were computed in.
 
 For this dataset's rotational residuals that is 16–92 independent samples
 against 1400–3600 frames, and a standard error on each median of

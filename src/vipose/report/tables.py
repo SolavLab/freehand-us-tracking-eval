@@ -12,9 +12,12 @@ The LaTeX emitted here is the table *body* -- the rows between ``\\midrule`` and
 
 from __future__ import annotations
 
+import zlib
 from pathlib import Path
 
-from ..metrics import summarize
+import numpy as np
+
+from ..metrics import bootstrap_standard_error, summarize
 from ..recordings import Cell, Dataset
 from ..results import read_residuals
 
@@ -27,9 +30,11 @@ __all__ = [
     "write_reference_fit_table",
 ]
 
-# Row order follows the manuscript, which groups by pipeline with the repeated
-# pivot acquisition set apart from the three motion conditions.
-PIPELINE_ORDER = ["zed-cuvslam", "rs-cuvslam", "zed-sdk"]
+# Row order follows the manuscript, which groups by recording -- so the three
+# pipelines of one condition sit together and can be read against each other --
+# with the repeated pivot acquisition set apart from the three conditions. The
+# pipeline order within a group is the numbering of the manuscript's Table 1.
+PIPELINE_ORDER = ["zed-sdk", "zed-cuvslam", "rs-cuvslam"]
 CONDITION_ORDER = ["pivot", "mixed", "freehand"]
 REPEAT = "pivot-repeat"
 
@@ -38,6 +43,25 @@ REPEAT = "pivot-repeat"
 # the measurement does not have.
 MM_DP = 2
 DEG_DP = 3
+
+# The confidence intervals the manuscript prints. 1.96 standard deviations of
+# the statistic over this many moving-block bootstrap replicates; the seed is
+# derived per cell so that a value never depends on the order in which the
+# cells happen to be computed.
+REPLICATES = 20000
+Z = 1.96
+
+
+def _p95(a, axis):
+    return np.percentile(a, 95, axis=axis)
+
+
+def _half_width(values, times_s, statistic, key: str) -> float:
+    """Half-width of the 95% interval for one statistic of one cell."""
+    se = bootstrap_standard_error(
+        values, times_s, statistic, replicates=REPLICATES, seed=zlib.crc32(key.encode())
+    )
+    return Z * se
 
 
 def residuals_table(dataset: Dataset, store: str | Path) -> dict:
@@ -49,12 +73,18 @@ def residuals_table(dataset: Dataset, store: str | Path) -> dict:
     """
     store = Path(store)
     rows = []
-    for pipeline in PIPELINE_ORDER:
-        for recording in CONDITION_ORDER + [REPEAT]:
+    for recording in CONDITION_ORDER + [REPEAT]:
+        for pipeline in PIPELINE_ORDER:
             cell = Cell(pipeline, recording)
-            path = _residuals_path(store, cell)
-            r = read_residuals(path)
+            r = read_residuals(_residuals_path(store, cell))
+            t = r.time_ms / 1000.0
             trans, rot = summarize(r.d_trans_mm), summarize(r.d_rot_deg)
+            td, rd = trans.as_dict(), rot.as_dict()
+            for d, series, unit in ((td, r.d_trans_mm, "trans"), (rd, r.d_rot_deg, "rot")):
+                for name, fn in (("median", np.median), ("p95", _p95)):
+                    d[f"{name}_half_width"] = _half_width(
+                        series, t, fn, f"{pipeline}/{recording}/{unit}/{name}"
+                    )
             rows.append(
                 {
                     "pipeline": pipeline,
@@ -63,34 +93,84 @@ def residuals_table(dataset: Dataset, store: str | Path) -> dict:
                     "recording_label": dataset.label(recording=recording),
                     "is_repeat": recording == REPEAT,
                     "frames": trans.n,
-                    "translational_mm": trans.as_dict(),
-                    "rotational_deg": rot.as_dict(),
+                    "translational_mm": td,
+                    "rotational_deg": rd,
                 }
             )
+    _mark_best_and_separated(rows)
     return {"table": "residuals", "dataset": dataset.id, "rows": rows}
+
+
+def _mark_best_and_separated(rows: list[dict]) -> None:
+    """Flag the lowest value of each recording, and whether it stands apart.
+
+    Two marks, because they answer different questions. The lowest value says
+    which pipeline came out ahead in that cell; separation says whether the
+    data support the claim. A value can be the best without the comparison
+    resolving, which is the common case here, so marking only the best would
+    overstate and marking only the separated ones would hide the ordering.
+
+    Separation is against *both* other pipelines, a stricter test than winning
+    one pairwise comparison, and the one a reader can apply to the table alone.
+    """
+    for row in rows:
+        row["best"] = {}
+        row["separated"] = {}
+    by_recording: dict[str, list[dict]] = {}
+    for row in rows:
+        by_recording.setdefault(row["recording"], []).append(row)
+    for group in by_recording.values():
+        for component in ("translational_mm", "rotational_deg"):
+            for name in ("median", "p95"):
+                key = f"{component}:{name}"
+
+                def bounds(row, _c=component, _n=name):
+                    d = row[_c]
+                    return d[_n], d[f"{_n}_half_width"]
+
+                best = min(group, key=lambda row: bounds(row)[0])
+                lo, lo_h = bounds(best)
+                best["best"][key] = True
+                best["separated"][key] = all(
+                    bounds(other)[0] - bounds(other)[1] > lo + lo_h
+                    for other in group
+                    if other is not best
+                )
 
 
 def to_latex(table: dict) -> str:
     """Render the table body as LaTeX rows."""
     # Pipeline macros as the manuscript defines them.
-    macro = {"zed-cuvslam": r"\zedCuVSLAM{}", "rs-cuvslam": r"\rsCuVSLAM{}",
-             "zed-sdk": r"\zedSDK{}"}
+    macro = {
+        "zed-cuvslam": r"\zedCuVSLAM{}",
+        "rs-cuvslam": r"\rsCuVSLAM{}",
+        "zed-sdk": r"\zedSDK{}",
+    }
+
+    def value(row, component, name, dp):
+        d = row[component]
+        key = f"{component}:{name}"
+        body = f"{d[name]:.{dp}f}~$\\pm$~{d[f'{name}_half_width']:.{dp}f}"
+        if row["best"].get(key):
+            body = rf"\textbf{{{body}}}"
+            if row["separated"].get(key):
+                body = rf"\underline{{{body}}}"
+        return body
+
     lines, previous = [], None
     for row in table["rows"]:
-        if previous is not None and row["pipeline"] != previous:
-            lines.append(r"\midrule")
-        elif row["is_repeat"]:
-            lines.append(r"\addlinespace")
-        first = row["pipeline"] != previous
-        name = macro.get(row["pipeline"], row["pipeline_label"])
-        t, r = row["translational_mm"], row["rotational_deg"]
+        if previous is not None and row["recording"] != previous:
+            lines.append(r"\midrule" if row["is_repeat"] else r"\addlinespace")
+        first = row["recording"] != previous
         lines.append(
-            f"{name if first else '':<16s} & {row['recording_label']:<14s} & "
-            f"{row['frames']:5d} & "
-            f"{t['median']:.{MM_DP}f} ({t['iqr']:.{MM_DP}f}) & {t['p95']:.{MM_DP}f} & "
-            f"{r['median']:.{DEG_DP}f} ({r['iqr']:.{DEG_DP}f}) & {r['p95']:.{DEG_DP}f} \\\\"
+            f"{row['recording_label'] if first else '':<16s} & "
+            f"{macro.get(row['pipeline'], row['pipeline_label']):<14s} & {row['frames']:5d} & "
+            f"{value(row, 'translational_mm', 'median', MM_DP):<34s} & "
+            f"{value(row, 'translational_mm', 'p95', MM_DP):<34s} & "
+            f"{value(row, 'rotational_deg', 'median', DEG_DP):<36s} & "
+            f"{value(row, 'rotational_deg', 'p95', DEG_DP):<36s} \\\\"
         )
-        previous = row["pipeline"]
+        previous = row["recording"]
     return "\n".join(lines) + "\n"
 
 
@@ -122,7 +202,7 @@ def _residuals_path(store: Path, cell: Cell) -> Path:
 # Motion characteristics (the manuscript's Table 2)
 # --------------------------------------------------------------------------
 
-MOTION_ORDER = ["pivot", "freehand", "mixed"]     # the manuscript's row order
+MOTION_ORDER = ["pivot", "freehand", "mixed"]  # the manuscript's row order
 MOTION_REPEAT = "pivot-repeat"
 
 
@@ -169,8 +249,7 @@ def motion_table(dataset: Dataset, store: str | Path) -> dict:
                 rb.rotvec[keep],
                 sample_rate_hz=dataset.vicon_rate_hz,
             ).as_dict()
-            | {"label": dataset.label(recording=recording),
-               "is_repeat": recording == MOTION_REPEAT}
+            | {"label": dataset.label(recording=recording), "is_repeat": recording == MOTION_REPEAT}
         )
     return {"table": "motion", "dataset": dataset.id, "rows": rows}
 
@@ -262,14 +341,16 @@ def reference_fit_table(dataset: Dataset, store: str | Path) -> dict:
         )
         rb = fit_rigid_body(mocap.cropped(lo, hi), min_markers=4)
         stats = summarize(rb.residual_mm[rb.valid])
-        rows.append({
-            "recording": recording,
-            "label": dataset.label(recording=recording),
-            "is_repeat": recording == MOTION_REPEAT,
-            "n_samples": int(rb.valid.sum()),
-            "duration_s": float((rb.time_ms[-1] - rb.time_ms[0]) / 1000.0),
-            "residual_mm": stats.as_dict(),
-        })
+        rows.append(
+            {
+                "recording": recording,
+                "label": dataset.label(recording=recording),
+                "is_repeat": recording == MOTION_REPEAT,
+                "n_samples": int(rb.valid.sum()),
+                "duration_s": float((rb.time_ms[-1] - rb.time_ms[0]) / 1000.0),
+                "residual_mm": stats.as_dict(),
+            }
+        )
     return {"table": "reference_fit", "dataset": dataset.id, "rows": rows}
 
 

@@ -25,6 +25,7 @@ __all__ = [
     "translational_residual",
     "rotational_residual",
     "correlation_time",
+    "bootstrap_standard_error",
     "effective_sample_size",
     "median_standard_error",
 ]
@@ -142,6 +143,67 @@ def correlation_time(values, dt_s: float) -> float:
     nonpositive = np.flatnonzero(rho[1:] <= 0)
     stop = int(nonpositive[0]) + 1 if nonpositive.size else rho.size
     return float(dt_s * (1.0 + 2.0 * rho[1:stop].sum()))
+
+
+def bootstrap_standard_error(
+    values,
+    times_s,
+    statistic=None,
+    *,
+    replicates: int = 20000,
+    seed: int = 0,
+    block_multiple: float = 3.0,
+    chunk: int = 2000,
+) -> float:
+    """Standard error of a statistic of an autocorrelated series.
+
+    A moving-block bootstrap: each replicate is assembled from blocks of
+    consecutive samples, drawn with replacement from random starting
+    positions, concatenated to the length of the original series. Resampling
+    whole blocks carries the serial dependence into the replicate; resampling
+    single samples would not, and the result would assume as many independent
+    observations as there are frames.
+
+    ``statistic`` is a callable taking ``(array, axis)``, defaulting to the
+    median; ``np.percentile(a, 95, axis=axis)`` gives the 95th percentile.
+    Block length is ``block_multiple`` correlation times, so a block spans
+    several times the interval over which the series stays correlated.
+
+    ``seed`` makes the result reproducible. It must be set per series by the
+    caller -- sharing one generator across series would make every value
+    depend on the order in which they happened to be computed.
+
+    Replicates are generated in chunks of ``chunk`` to bound memory; the
+    result does not depend on the chunk size.
+    """
+    if statistic is None:
+        statistic = np.median
+    v = np.asarray(values, dtype=float)
+    t = np.asarray(times_s, dtype=float)
+    if v.shape != t.shape:
+        raise ValueError(f"shape mismatch: {v.shape} values, {t.shape} times")
+    if replicates < 2:
+        raise ValueError("need at least two replicates")
+    dt = float(np.median(np.diff(t)))
+    length = max(2, int(round(block_multiple * correlation_time(v, dt) / dt)))
+    n = v.size
+    if length >= n:
+        raise ValueError(
+            f"block of {length} samples does not fit in a series of {n}; "
+            "the series is too short for its correlation time"
+        )
+    n_blocks = int(np.ceil(n / length))
+    rng = np.random.default_rng(seed)
+    offsets = np.arange(length)
+    out = np.empty(replicates, dtype=float)
+    done = 0
+    while done < replicates:
+        size = min(chunk, replicates - done)
+        starts = rng.integers(0, n - length + 1, size=(size, n_blocks))
+        idx = (starts[:, :, None] + offsets[None, None, :]).reshape(size, -1)[:, :n]
+        out[done : done + size] = statistic(v[idx], axis=1)
+        done += size
+    return float(np.std(out, ddof=1))
 
 
 def effective_sample_size(values, times_s) -> float:

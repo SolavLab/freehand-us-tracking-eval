@@ -135,15 +135,20 @@ def test_latex_table_is_well_formed(dataset, tmp_path):
     """The emitted LaTeX has one row per cell and the manuscript's row order."""
     table = residuals_table(dataset, GOLDEN)
     assert len(table["rows"]) == 12
-    assert [r["pipeline"] for r in table["rows"][:4]] == ["zed-cuvslam"] * 4
+    # Grouped by recording, pipelines in the order Table 1 numbers them.
+    assert [r["recording"] for r in table["rows"][:3]] == ["pivot"] * 3
+    assert [r["pipeline"] for r in table["rows"][:3]] == [
+        "zed-sdk", "zed-cuvslam", "rs-cuvslam"
+    ]
+    assert [r["recording"] for r in table["rows"][-3:]] == ["pivot-repeat"] * 3
 
     tex = to_latex(table)
     data_rows = [ln for ln in tex.splitlines() if ln.rstrip().endswith(r"\\")]
     assert len(data_rows) == 12, f"expected 12 data rows, got {len(data_rows)}"
     for line in data_rows:
         assert line.count("&") == 6, f"expected 7 columns: {line}"
-    assert tex.count(r"\midrule") == 2
-    assert tex.count(r"\addlinespace") == 3
+    assert tex.count(r"\midrule") == 1          # before the repeat block
+    assert tex.count(r"\addlinespace") == 2    # between the three conditions
 
 
 def test_repeat_recording_is_linked(dataset):
@@ -342,3 +347,102 @@ def test_resolution_limit_is_twice_the_largest_standard_error(precision):
     assert round(2 * largest, 2) == 0.05, (
         f"twice the largest standard error is {2 * largest:.4f} deg, discussion says 0.05"
     )
+
+
+# Table 4's confidence half-widths, as printed in the manuscript:
+# (pipeline, recording) -> translational median, translational 95th,
+#                          rotational median, rotational 95th
+TABLE4_HALF_WIDTHS = {
+    ("zed-sdk", "pivot"):            (0.85, 1.77, 0.037, 0.044),
+    ("zed-cuvslam", "pivot"):        (0.49, 0.44, 0.013, 0.028),
+    ("rs-cuvslam", "pivot"):         (0.68, 1.05, 0.021, 0.057),
+    ("zed-sdk", "mixed"):            (0.71, 2.03, 0.031, 0.081),
+    ("zed-cuvslam", "mixed"):        (0.55, 1.31, 0.016, 0.023),
+    ("rs-cuvslam", "mixed"):         (1.19, 2.06, 0.039, 0.023),
+    ("zed-sdk", "freehand"):         (1.28, 1.77, 0.023, 0.049),
+    ("zed-cuvslam", "freehand"):     (0.75, 1.57, 0.019, 0.034),
+    ("rs-cuvslam", "freehand"):      (0.63, 1.27, 0.040, 0.188),
+    ("zed-sdk", "pivot-repeat"):     (0.55, 2.37, 0.028, 0.039),
+    ("zed-cuvslam", "pivot-repeat"): (0.56, 0.71, 0.017, 0.029),
+    ("rs-cuvslam", "pivot-repeat"):  (1.23, 3.07, 0.044, 0.147),
+}
+
+# The values the manuscript marks. Bold is the lowest of the three pipelines
+# in that recording and column; underlining adds that its interval clears both
+# of the others.
+TABLE4_BEST = {
+    ("zed-cuvslam", "pivot", "translational_mm:median"),
+    ("zed-cuvslam", "pivot", "translational_mm:p95"),
+    ("zed-cuvslam", "pivot", "rotational_deg:median"),
+    ("zed-cuvslam", "pivot", "rotational_deg:p95"),
+    ("zed-cuvslam", "mixed", "translational_mm:median"),
+    ("zed-cuvslam", "mixed", "translational_mm:p95"),
+    ("zed-cuvslam", "mixed", "rotational_deg:median"),
+    ("zed-cuvslam", "mixed", "rotational_deg:p95"),
+    ("rs-cuvslam", "freehand", "translational_mm:median"),
+    ("zed-cuvslam", "freehand", "translational_mm:p95"),
+    ("zed-cuvslam", "freehand", "rotational_deg:median"),
+    ("zed-cuvslam", "freehand", "rotational_deg:p95"),
+    ("rs-cuvslam", "pivot-repeat", "translational_mm:median"),
+    ("zed-cuvslam", "pivot-repeat", "translational_mm:p95"),
+    ("zed-cuvslam", "pivot-repeat", "rotational_deg:median"),
+    ("zed-cuvslam", "pivot-repeat", "rotational_deg:p95"),
+}
+
+TABLE4_SEPARATED = {
+    ("zed-cuvslam", "pivot", "translational_mm:p95"),
+    ("zed-cuvslam", "pivot", "rotational_deg:median"),
+    ("zed-cuvslam", "pivot", "rotational_deg:p95"),
+    ("zed-cuvslam", "pivot-repeat", "rotational_deg:p95"),
+}
+
+
+@pytest.fixture(scope="module")
+def residuals(dataset) -> dict:
+    return residuals_table(dataset, GOLDEN)
+
+
+@pytest.mark.parametrize("key", sorted(TABLE4_HALF_WIDTHS), ids=lambda k: f"{k[0]}-{k[1]}")
+def test_confidence_half_widths_match_table4(residuals, key):
+    """The bootstrap reproduces the intervals the manuscript prints.
+
+    The bootstrap is seeded per cell, so this is an exact reproduction rather
+    than a tolerance: a change in the resampling would show up here.
+    """
+    row = next(r for r in residuals["rows"] if (r["pipeline"], r["recording"]) == key)
+    tm, tp, rm, rp = TABLE4_HALF_WIDTHS[key]
+    for label, got, expected, dp in (
+        ("translational median", row["translational_mm"]["median_half_width"], tm, 2),
+        ("translational 95th", row["translational_mm"]["p95_half_width"], tp, 2),
+        ("rotational median", row["rotational_deg"]["median_half_width"], rm, 3),
+        ("rotational 95th", row["rotational_deg"]["p95_half_width"], rp, 3),
+    ):
+        assert round(got, dp) == expected, (
+            f"{key} {label}: {got:.6f} rounds to {round(got, dp)}, Table 4 says {expected}"
+        )
+
+
+def test_marked_values_match_the_manuscript(residuals):
+    """One mark for the lowest value, a second for the ones that separate."""
+    best = {
+        (r["pipeline"], r["recording"], k)
+        for r in residuals["rows"] for k, v in r["best"].items() if v
+    }
+    separated = {
+        (r["pipeline"], r["recording"], k)
+        for r in residuals["rows"] for k, v in r["separated"].items() if v
+    }
+    assert best == TABLE4_BEST
+    assert separated == TABLE4_SEPARATED
+    assert separated < best, "a value cannot separate without being the lowest"
+
+
+def test_every_recording_and_column_has_exactly_one_best(residuals):
+    """Four columns in each of four recordings, one winner apiece."""
+    from collections import Counter
+
+    counts = Counter(
+        (r["recording"], k) for r in residuals["rows"] for k, v in r["best"].items() if v
+    )
+    assert len(counts) == 16
+    assert set(counts.values()) == {1}

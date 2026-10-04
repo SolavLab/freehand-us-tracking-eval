@@ -28,6 +28,7 @@ from .geometry.transforms import (
 from .kinematics import angular_speed, rotational_increments
 from .metrics import (
     Summary,
+    bootstrap_standard_error,
     correlation_time,
     effective_sample_size,
     median_standard_error,
@@ -78,6 +79,7 @@ __all__ = [
     "translational_residual",
     "rotational_residual",
     # precision of a statistic of an autocorrelated series
+    "bootstrap_standard_error",
     "correlation_time",
     "effective_sample_size",
     "median_standard_error",
