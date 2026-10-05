@@ -13,6 +13,7 @@ import pytest
 from scipy.signal import lfilter
 
 from vipose.metrics import (
+    bootstrap_difference_standard_error,
     bootstrap_standard_error,
     correlation_time,
     effective_sample_size,
@@ -209,3 +210,86 @@ def test_bootstrap_rejects_mismatched_times_and_too_few_replicates():
         bootstrap_standard_error(x, times_for(x)[:-1], replicates=100)
     with pytest.raises(ValueError, match="at least two replicates"):
         bootstrap_standard_error(x, times_for(x), replicates=1)
+
+
+def test_difference_bootstrap_vanishes_for_a_series_against_itself():
+    """The point of drawing one set of blocks: a series cannot differ from itself."""
+    x = ar1(0.9, n=20_000)
+    t = times_for(x)
+    assert bootstrap_difference_standard_error(x, t, x, t, replicates=500, seed=0) == 0.0
+
+
+def test_difference_bootstrap_matches_quadrature_for_independent_series():
+    """Uncorrelated series are the case the quadrature sum already covers."""
+    a, b = ar1(0.9, n=20_000, seed=1), ar1(0.9, n=20_000, seed=2)
+    t = times_for(a)
+    quadrature = np.hypot(
+        bootstrap_standard_error(a, t, replicates=4000, seed=1),
+        bootstrap_standard_error(b, t, replicates=4000, seed=2),
+    )
+    got = bootstrap_difference_standard_error(a, t, b, t, replicates=4000, seed=0)
+    assert got == pytest.approx(quadrature, rel=0.1)
+
+
+def test_difference_bootstrap_falls_below_quadrature_when_correlated():
+    """Shared variation cancels in the difference, which quadrature cannot see."""
+    shared = ar1(0.9, n=20_000, seed=3)
+    a = shared + 0.3 * ar1(0.9, n=20_000, seed=4)
+    b = shared + 0.3 * ar1(0.9, n=20_000, seed=5)
+    t = times_for(a)
+    quadrature = np.hypot(
+        bootstrap_standard_error(a, t, replicates=4000, seed=1),
+        bootstrap_standard_error(b, t, replicates=4000, seed=2),
+    )
+    paired = bootstrap_difference_standard_error(a, t, b, t, replicates=4000, seed=0)
+    assert paired < 0.6 * quadrature
+
+
+def test_difference_bootstrap_unpaired_ignores_the_correlation():
+    """Two different recordings have no common clock, so there is nothing to pair."""
+    shared = ar1(0.9, n=20_000, seed=3)
+    a = shared + 0.3 * ar1(0.9, n=20_000, seed=4)
+    b = shared + 0.3 * ar1(0.9, n=20_000, seed=5)
+    t = times_for(a)
+    paired = bootstrap_difference_standard_error(a, t, b, t, replicates=4000, seed=0)
+    unpaired = bootstrap_difference_standard_error(
+        a, t, b, t, replicates=4000, seed=0, paired=False
+    )
+    assert unpaired > 1.5 * paired
+
+
+def test_difference_bootstrap_pairs_on_elapsed_time_not_on_the_epoch():
+    """Series sampled at different rates, from different epochs, still pair."""
+    x = ar1(0.9, n=20_000)
+    t = times_for(x)
+    a = bootstrap_difference_standard_error(x, t, x[::2], t[::2], replicates=500, seed=0)
+    b = bootstrap_difference_standard_error(x, t + 1e6, x[::2], t[::2], replicates=500, seed=0)
+    assert a == b
+    assert a > 0.0
+
+
+def test_difference_bootstrap_is_reproducible_and_chunk_independent():
+    a, b = ar1(0.9, n=20_000, seed=1), ar1(0.9, n=20_000, seed=2)
+    t = times_for(a)
+    first = bootstrap_difference_standard_error(a, t, b, t, replicates=400, seed=7)
+    assert first == bootstrap_difference_standard_error(a, t, b, t, replicates=400, seed=7)
+    assert first != bootstrap_difference_standard_error(a, t, b, t, replicates=400, seed=8)
+    assert first == bootstrap_difference_standard_error(
+        a, t, b, t, replicates=400, seed=7, chunk=50
+    )
+
+
+def test_difference_bootstrap_rejects_a_window_shorter_than_its_block():
+    a, b = ar1(0.9, n=500, seed=1), ar1(0.9, n=500, seed=2)
+    t = times_for(a)
+    with pytest.raises(ValueError, match="too short for their correlation time"):
+        bootstrap_difference_standard_error(a, t, b, t, replicates=100, seed=0, block_multiple=500)
+
+
+def test_difference_bootstrap_rejects_mismatched_times_and_too_few_replicates():
+    a, b = ar1(0.9, n=5000, seed=1), ar1(0.9, n=5000, seed=2)
+    t = times_for(a)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        bootstrap_difference_standard_error(a, t, b, t[:-1], replicates=100)
+    with pytest.raises(ValueError, match="at least two replicates"):
+        bootstrap_difference_standard_error(a, t, b, t, replicates=1)

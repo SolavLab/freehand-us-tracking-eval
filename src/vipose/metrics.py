@@ -26,6 +26,7 @@ __all__ = [
     "rotational_residual",
     "correlation_time",
     "bootstrap_standard_error",
+    "bootstrap_difference_standard_error",
     "effective_sample_size",
     "median_standard_error",
 ]
@@ -202,6 +203,87 @@ def bootstrap_standard_error(
         starts = rng.integers(0, n - length + 1, size=(size, n_blocks))
         idx = (starts[:, :, None] + offsets[None, None, :]).reshape(size, -1)[:, :n]
         out[done : done + size] = statistic(v[idx], axis=1)
+        done += size
+    return float(np.std(out, ddof=1))
+
+
+def bootstrap_difference_standard_error(
+    a_values,
+    a_times_s,
+    b_values,
+    b_times_s,
+    statistic=None,
+    *,
+    replicates: int = 20000,
+    seed: int = 0,
+    paired: bool = True,
+    block_multiple: float = 3.0,
+    chunk: int = 2000,
+) -> float:
+    """Standard error of the difference between the same statistic of two series.
+
+    Whether two cells differ is a question about their difference, so it is
+    the difference that has to be resampled. Comparing the two series'
+    individual intervals and asking whether they overlap is a stricter test
+    than it looks: individual standard errors combine in quadrature, so two
+    intervals can overlap by up to about half an arm while the difference is
+    still significant at the same level.
+
+    With ``paired`` the two series are resampled *together*: one set of block
+    start times is drawn per replicate and used for both, so a block covers
+    the same stretch of physical motion in each even where the two are
+    sampled at different rates. Blocks are positioned in elapsed time from
+    each series' own first sample, which is the common clock when both cover
+    the same evaluation window; the epoch of ``times_s`` need not agree
+    between them. Any correlation between the two statistics is then carried
+    by the replicates rather than assumed away. Pass ``paired=False`` where
+    there is nothing to pair -- two different recordings, whose elapsed times
+    refer to unrelated motions -- and the blocks are drawn independently.
+
+    Block length is ``block_multiple`` times the longer of the two
+    correlation times, so one block spans several correlation times of both
+    series. Applied to a single series the draw reduces to the one
+    ``bootstrap_standard_error`` makes, so the difference interval and the
+    individual intervals describe the same resampling.
+    """
+    if statistic is None:
+        statistic = np.median
+    series = []
+    for values, times_s in ((a_values, a_times_s), (b_values, b_times_s)):
+        v = np.asarray(values, dtype=float)
+        t = np.asarray(times_s, dtype=float)
+        if v.shape != t.shape:
+            raise ValueError(f"shape mismatch: {v.shape} values, {t.shape} times")
+        if v.size < 2:
+            raise ValueError("need at least two samples")
+        dt = float(np.median(np.diff(t)))
+        series.append((v, t - t[0], dt, correlation_time(v, dt)))
+    if replicates < 2:
+        raise ValueError("need at least two replicates")
+
+    span = block_multiple * max(tau for *_, tau in series)
+    duration = min(float(t[-1]) for _, t, _, _ in series)
+    if span >= duration:
+        raise ValueError(
+            f"block of {span:.3g}s does not fit in a window of {duration:.3g}s; "
+            "the series are too short for their correlation time"
+        )
+    n_blocks = int(np.ceil(duration / span))
+    lengths = [max(2, int(round(span / dt))) for _, _, dt, _ in series]
+
+    rng = np.random.default_rng(seed)
+    out = np.empty(replicates, dtype=float)
+    done = 0
+    while done < replicates:
+        size = min(chunk, replicates - done)
+        starts = rng.uniform(0.0, duration - span, size=(size, n_blocks))
+        draws = [starts, starts if paired else rng.uniform(0.0, duration - span, starts.shape)]
+        replicate = []
+        for (v, t, _, _), length, starts in zip(series, lengths, draws, strict=True):
+            first = np.clip(np.searchsorted(t, starts), 0, v.size - length)
+            idx = (first[:, :, None] + np.arange(length)).reshape(size, -1)
+            replicate.append(statistic(v[idx], axis=1))
+        out[done : done + size] = replicate[0] - replicate[1]
         done += size
     return float(np.std(out, ddof=1))
 

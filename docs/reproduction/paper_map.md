@@ -79,8 +79,9 @@ motion conditions. The correlation-time endpoints come out at 0.649 and
 `pytest` enforces the mapping above rather than trusting this document:
 
 - every cell reproduces its Table 4 row at the printed precision, including the
-  confidence half-widths and which values are marked as separated, and the
-  per-frame series match the golden master elementwise
+  confidence half-widths and which values are marked as separated — the latter
+  decided by resampling each difference, not by whether the printed intervals
+  overlap — and the per-frame series match the golden master elementwise
 - every recording reproduces its Table 2 row, including the Shah margin
 - the calibration floor reproduces to 0.02 mm
 - the emitted LaTeX has the manuscript's row order, column count and rules

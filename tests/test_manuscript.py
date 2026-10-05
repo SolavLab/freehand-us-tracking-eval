@@ -368,8 +368,8 @@ TABLE4_HALF_WIDTHS = {
 }
 
 # The values the manuscript marks. Bold is the lowest of the three pipelines
-# in that recording and column; underlining adds that its interval clears both
-# of the others.
+# in that recording and column; underlining adds that the 95% interval for its
+# difference from each of the other two excludes zero.
 TABLE4_BEST = {
     ("zed-cuvslam", "pivot", "translational_mm:median"),
     ("zed-cuvslam", "pivot", "translational_mm:p95"),
@@ -393,6 +393,11 @@ TABLE4_SEPARATED = {
     ("zed-cuvslam", "pivot", "translational_mm:p95"),
     ("zed-cuvslam", "pivot", "rotational_deg:median"),
     ("zed-cuvslam", "pivot", "rotational_deg:p95"),
+    ("zed-cuvslam", "mixed", "translational_mm:median"),
+    ("zed-cuvslam", "mixed", "translational_mm:p95"),
+    ("zed-cuvslam", "mixed", "rotational_deg:p95"),
+    ("zed-cuvslam", "freehand", "rotational_deg:median"),
+    ("zed-cuvslam", "pivot-repeat", "translational_mm:p95"),
     ("zed-cuvslam", "pivot-repeat", "rotational_deg:p95"),
 }
 

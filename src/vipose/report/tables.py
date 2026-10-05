@@ -17,7 +17,11 @@ from pathlib import Path
 
 import numpy as np
 
-from ..metrics import bootstrap_standard_error, summarize
+from ..metrics import (
+    bootstrap_difference_standard_error,
+    bootstrap_standard_error,
+    summarize,
+)
 from ..recordings import Cell, Dataset
 from ..results import read_residuals
 
@@ -72,12 +76,16 @@ def residuals_table(dataset: Dataset, store: str | Path) -> dict:
     (a run's layout); both are accepted.
     """
     store = Path(store)
-    rows = []
+    rows, cells = [], {}
     for recording in CONDITION_ORDER + [REPEAT]:
         for pipeline in PIPELINE_ORDER:
             cell = Cell(pipeline, recording)
             r = read_residuals(_residuals_path(store, cell))
             t = r.time_ms / 1000.0
+            cells[cell] = {
+                "translational_mm": (r.d_trans_mm, t),
+                "rotational_deg": (r.d_rot_deg, t),
+            }
             trans, rot = summarize(r.d_trans_mm), summarize(r.d_rot_deg)
             td, rd = trans.as_dict(), rot.as_dict()
             for d, series, unit in ((td, r.d_trans_mm, "trans"), (rd, r.d_rot_deg, "rot")):
@@ -97,11 +105,11 @@ def residuals_table(dataset: Dataset, store: str | Path) -> dict:
                     "rotational_deg": rd,
                 }
             )
-    _mark_best_and_separated(rows)
+    _mark_best_and_separated(rows, cells)
     return {"table": "residuals", "dataset": dataset.id, "rows": rows}
 
 
-def _mark_best_and_separated(rows: list[dict]) -> None:
+def _mark_best_and_separated(rows: list[dict], series: dict) -> None:
     """Flag the lowest value of each recording, and whether it stands apart.
 
     Two marks, because they answer different questions. The lowest value says
@@ -110,8 +118,15 @@ def _mark_best_and_separated(rows: list[dict]) -> None:
     resolving, which is the common case here, so marking only the best would
     overstate and marking only the separated ones would hide the ordering.
 
-    Separation is against *both* other pipelines, a stricter test than winning
-    one pairwise comparison, and the one a reader can apply to the table alone.
+    Separation is judged on the difference itself: the two cells are
+    resampled together and the best is held separated from another pipeline
+    only where the 95% interval for their difference excludes zero. Asking
+    instead whether the two printed intervals overlap would be a stricter
+    test than the stated level -- standard errors combine in quadrature, not
+    linearly -- and would reject differences the data do establish.
+
+    Separation is against *both* other pipelines, a stricter test than
+    winning one pairwise comparison.
     """
     for row in rows:
         row["best"] = {}
@@ -119,23 +134,34 @@ def _mark_best_and_separated(rows: list[dict]) -> None:
     by_recording: dict[str, list[dict]] = {}
     for row in rows:
         by_recording.setdefault(row["recording"], []).append(row)
-    for group in by_recording.values():
+    for recording, group in by_recording.items():
         for component in ("translational_mm", "rotational_deg"):
-            for name in ("median", "p95"):
+            for name, fn in (("median", np.median), ("p95", _p95)):
                 key = f"{component}:{name}"
-
-                def bounds(row, _c=component, _n=name):
-                    d = row[_c]
-                    return d[_n], d[f"{_n}_half_width"]
-
-                best = min(group, key=lambda row: bounds(row)[0])
-                lo, lo_h = bounds(best)
+                best = min(group, key=lambda row, _c=component, _n=name: row[_c][_n])
                 best["best"][key] = True
                 best["separated"][key] = all(
-                    bounds(other)[0] - bounds(other)[1] > lo + lo_h
+                    _separated(best, other, series, recording, component, name, fn)
                     for other in group
                     if other is not best
                 )
+
+
+def _separated(best: dict, other: dict, series: dict, recording, component, name, fn) -> bool:
+    """Does the 95% interval for the difference between two cells exclude zero?"""
+    a_values, a_times = series[Cell(best["pipeline"], recording)][component]
+    b_values, b_times = series[Cell(other["pipeline"], recording)][component]
+    pair = "/".join(sorted((best["pipeline"], other["pipeline"])))
+    se = bootstrap_difference_standard_error(
+        a_values,
+        a_times,
+        b_values,
+        b_times,
+        fn,
+        replicates=REPLICATES,
+        seed=zlib.crc32(f"{pair}/{recording}/{component}/{name}".encode()),
+    )
+    return abs(other[component][name] - best[component][name]) > Z * se
 
 
 def to_latex(table: dict) -> str:

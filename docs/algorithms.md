@@ -167,6 +167,8 @@ correlation_time(values, dt_s) -> float           # s, integrated autocorrelatio
 effective_sample_size(values, times_s) -> float   # independent samples, = duration / tau
 median_standard_error(values, times_s) -> float   # same units as `values`
 bootstrap_standard_error(values, times_s, statistic=np.median, *, seed=0) -> float
+bootstrap_difference_standard_error(a_values, a_times_s, b_values, b_times_s,
+                                    statistic=np.median, *, seed=0, paired=True) -> float
 ```
 
 `median_standard_error` is the asymptotic formula and applies to a median only.
@@ -178,9 +180,19 @@ make each result depend on the order they were computed in.
 
 For this dataset's rotational residuals that is 16–92 independent samples
 against 1400–3600 frames, and a standard error on each median of
-0.008–0.026°. Use it to decide which differences between two series are worth
-interpreting: below roughly twice the larger standard error, a gap between
-medians is not resolved.
+0.008–0.026°.
+
+To decide whether two series actually differ, resample the *difference*:
+`bootstrap_difference_standard_error` draws one set of block start times and
+applies it to both, so a block covers the same stretch of motion in each even
+where the two are sampled at different rates, and any correlation between the
+two statistics is carried by the replicates. Pass `paired=False` where there
+is nothing to pair — two different recordings, whose elapsed times refer to
+unrelated motions — and the blocks are drawn independently, which recovers
+the quadrature sum of the two individual standard errors. Comparing the two
+series' own intervals and asking whether they overlap is *not* the same test:
+standard errors combine in quadrature rather than linearly, so overlapping
+intervals can still hide a difference significant at the same level.
 
 `rotational_residual` deliberately goes through `Rotation.from_matrix(...).magnitude()`
 rather than `arccos((tr R − 1) / 2)`: the two agree analytically, but arccos of
