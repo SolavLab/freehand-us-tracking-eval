@@ -78,6 +78,34 @@ transforms ready for the next step — and `.residual_mm`, the per-frame RMS
 fit residual, which is itself a useful measure of your reference's own
 precision.
 
+That residual measures the reference's *translational* precision directly.
+Its orientation precision is not measured at all, and has to be propagated
+from the residual and the shape of the cluster:
+
+```python
+cluster_rms_radius(positions) -> float                        # mm, the lever arm
+reference_uncertainty(residual_mm, positions)
+    -> ReferenceUncertainty   # coordinate_noise_mm, marker_noise_mm,
+                              # axis_deg (three principal axes), orientation_deg
+```
+
+Two conversions, each easy to get wrong by a factor of √3. `residual_mm` is a
+root mean over *markers* of the squared point-to-point error, so it is a
+displacement magnitude rather than a per-coordinate scatter, and it understates
+the noise it was fitted to because the fit absorbs six degrees of freedom:
+`sigma = residual / sqrt((3n - 6) / n)` recovers the per-coordinate noise, and
+`sqrt(3) * sigma` the per-marker displacement. Orientation then follows from
+the Cramér–Rao bound, `sigma / sqrt(sum of squared perpendicular distances)`
+per axis, summed in quadrature over the three principal axes.
+
+For this dataset: five markers at a 166 mm RMS radius with a 0.279 mm fit
+residual give 0.36 mm of per-marker noise and **0.07°** of orientation
+uncertainty, with the three axes agreeing to 3% — which is what the manuscript
+means by "essentially isotropic". Reading that 0.36 mm back as a per-coordinate
+scatter would imply a 0.48 mm residual and 0.12°, neither of which the data
+show; `tests/test_calibration.py` pins every link against a Monte Carlo of the
+fit itself.
+
 ## 3. Reference resampling — `vipose.sync.resample`
 
 Once you have an offset, resample the reference onto the track's own

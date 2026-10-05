@@ -84,6 +84,9 @@ motion conditions. The correlation-time endpoints come out at 0.649 and
   overlap — and the per-frame series match the golden master elementwise
 - every recording reproduces its Table 2 row, including the Shah margin
 - the calibration floor reproduces to 0.02 mm
+- the reference's 166 mm cluster radius, 0.36 mm marker noise and 0.07°
+  orientation uncertainty reproduce from the shipped mocap, and agree with a
+  Monte Carlo of the rigid-body fit
 - the emitted LaTeX has the manuscript's row order, column count and rules
 - the pose-continuity counts reproduce the window-independent published values
 - no numerical module imports pyplot, so results never depend on drawing

@@ -26,7 +26,11 @@ import cv2  # noqa: E402
 
 from vipose import Dataset  # noqa: E402
 from vipose.calibration import SHAH, marker_frame, solve_hand_eye  # noqa: E402
-from vipose.geometry.rigid_body import fit_rigid_body  # noqa: E402
+from vipose.geometry.rigid_body import (  # noqa: E402
+    cluster_rms_radius,
+    fit_rigid_body,
+    reference_uncertainty,
+)
 from vipose.geometry.transforms import to_matrices  # noqa: E402
 from vipose.io.mocap import load_mocap  # noqa: E402
 from vipose.io.tracks import load_track  # noqa: E402
@@ -187,3 +191,107 @@ def test_camera_to_marker_distance_reproduces_the_calibration_floor():
         assert spread == pytest.approx(want, abs=0.02), (
             f"{pipeline}: |t_M_C| spread {spread:.3f} mm, paper reports {want} mm"
         )
+
+
+# ---------------------------------------------------------------------------
+# The reference's own orientation uncertainty.
+#
+# The manuscript's Discussion quotes 0.36 mm of per-marker noise and 0.07 deg
+# of orientation uncertainty for a 166 mm cluster. That chain was carried by
+# hand for several drafts and reconstructed wrongly twice, both times by
+# reading the 0.36 mm as a per-coordinate scatter rather than a displacement
+# magnitude -- an error of sqrt(3), which happens to leave the quoted 0.07 deg
+# looking right if it is then fed into a per-axis formula. These tests pin
+# every link so the next reconstruction is a test run rather than an argument.
+# ---------------------------------------------------------------------------
+
+# Table 3, mean per-frame RMS residual within the shared evaluation window.
+TABLE3_RESIDUAL_MM = {
+    "pivot": 0.279,
+    "freehand": 0.231,
+    "mixed": 0.209,
+    "pivot-repeat": 0.265,
+}
+
+
+def _constellation(recording: str) -> np.ndarray:
+    mocap = load_mocap(
+        DATASET.reference_csv(recording),
+        marker_prefix=DATASET.marker_prefix,
+        expected_rate_hz=DATASET.vicon_rate_hz,
+    )
+    positions = mocap.positions
+    return positions[np.isfinite(positions).all(axis=(1, 2))][0]
+
+
+@pytest.mark.parametrize("recording", sorted(TABLE3_RESIDUAL_MM))
+def test_marker_cluster_radius_is_the_166_mm_the_manuscript_quotes(recording):
+    """One rigid frame, so every recording must give the same lever arm."""
+    assert cluster_rms_radius(_constellation(recording)) == pytest.approx(166.0, abs=0.1)
+
+
+def test_reference_orientation_uncertainty_matches_the_manuscript():
+    """0.279 mm of residual over a 166 mm cluster gives 0.36 mm and 0.07 deg.
+
+    The Discussion builds the floor on the worst of the four recordings, which
+    is Pivot. That is the conservative choice for a bound.
+    """
+    u = reference_uncertainty(TABLE3_RESIDUAL_MM["pivot"], _constellation("pivot"))
+    assert u.n_markers == 5
+    assert round(u.marker_noise_mm, 2) == 0.36
+    assert round(u.orientation_deg, 2) == 0.07
+    # the per-coordinate scatter is smaller by sqrt(3); conflating the two is
+    # the mistake this test exists to catch
+    assert u.marker_noise_mm == pytest.approx(np.sqrt(3) * u.coordinate_noise_mm)
+    assert round(u.coordinate_noise_mm, 2) == 0.21
+
+
+def test_the_cluster_is_essentially_isotropic():
+    """The manuscript's word for a 3% spread between the principal axes."""
+    axis = np.array(reference_uncertainty(0.279, _constellation("pivot")).axis_deg)
+    assert axis.max() / axis.min() < 1.05
+    assert np.sqrt((axis**2).sum()) == pytest.approx(
+        reference_uncertainty(0.279, _constellation("pivot")).orientation_deg
+    )
+
+
+def test_propagation_agrees_with_a_monte_carlo_of_the_fit():
+    """The analytic bound against the fit it is meant to describe.
+
+    Perturb the real constellation by the per-coordinate noise the derivation
+    infers, refit, and check that both the residual it was derived from and
+    the orientation error it predicts come back.
+    """
+    from scipy.spatial.transform import Rotation
+
+    nominal = _constellation("pivot")
+    nominal = nominal - nominal.mean(axis=0)
+    u = reference_uncertainty(0.279, nominal)
+
+    rng = np.random.default_rng(0)
+    residuals, angles = [], []
+    for _ in range(4000):
+        noisy = nominal + rng.normal(scale=u.coordinate_noise_mm, size=nominal.shape)
+        noisy -= noisy.mean(axis=0)
+        left, _, right = np.linalg.svd(nominal.T @ noisy)
+        flip = np.diag([1.0, 1.0, np.sign(np.linalg.det(left @ right))])
+        rotation = left @ flip @ right
+        residual = noisy - nominal @ rotation
+        residuals.append((residual**2).sum(axis=1).mean())
+        angles.append(Rotation.from_matrix(rotation).magnitude())
+
+    assert np.sqrt(np.mean(residuals)) == pytest.approx(0.279, rel=0.02)
+    simulated = np.degrees(np.sqrt(np.mean(np.square(angles))))
+    assert simulated == pytest.approx(u.orientation_deg, rel=0.02)
+
+
+def test_reference_uncertainty_rejects_geometry_it_cannot_use():
+    collinear = np.stack([np.arange(5.0), np.zeros(5), np.zeros(5)], axis=1)
+    with pytest.raises(ValueError, match="collinear"):
+        reference_uncertainty(0.279, collinear)
+    with pytest.raises(ValueError, match="at least three markers"):
+        reference_uncertainty(0.279, np.zeros((2, 3)))
+    with pytest.raises(ValueError, match="must be positive"):
+        reference_uncertainty(0.0, _constellation("pivot"))
+    with pytest.raises(ValueError, match=r"must be \(n, 3\)"):
+        cluster_rms_radius(np.zeros((5, 2)))

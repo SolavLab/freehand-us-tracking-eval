@@ -17,7 +17,13 @@ __version__ = "1.0.0"
 
 from .calibration import HandEyeResult, MarkerFrame, marker_frame, solve_hand_eye
 from .conditioning import shah_margin, shah_singular_values
-from .geometry.rigid_body import RigidBodyTrajectory, fit_rigid_body
+from .geometry.rigid_body import (
+    ReferenceUncertainty,
+    RigidBodyTrajectory,
+    cluster_rms_radius,
+    fit_rigid_body,
+    reference_uncertainty,
+)
 from .geometry.transforms import (
     from_matrices,
     relative_rotation,
@@ -55,6 +61,9 @@ __all__ = [
     # rigid-body fitting
     "RigidBodyTrajectory",
     "fit_rigid_body",
+    "ReferenceUncertainty",
+    "cluster_rms_radius",
+    "reference_uncertainty",
     # hand-eye calibration
     "HandEyeResult",
     "MarkerFrame",
