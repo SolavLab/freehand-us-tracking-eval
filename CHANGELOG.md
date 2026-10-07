@@ -6,6 +6,8 @@ added compatibly.
 
 ## v1.1.0
 
+Archived at [10.5281/zenodo.23213919](https://doi.org/10.5281/zenodo.23213919).
+
 ### Added
 
 - **Block-bootstrap confidence intervals** for the residual statistics.
@@ -29,10 +31,11 @@ added compatibly.
 
 ### Changed
 
-- The raw-recording archive's DOI is corrected throughout from the reserved
-  `10.5281/zenodo.22690903` to the published `10.5281/zenodo.22690904`
-  (CC-BY-4.0). **Anyone working from the v1.0.0 tag has the reserved DOI,
-  which does not resolve.**
+- The raw-recording archive is now cited by its version DOI,
+  `10.5281/zenodo.22690904` (CC-BY-4.0), rather than the concept DOI
+  `10.5281/zenodo.22690903` that v1.0.0 carried. Both resolve; the concept DOI
+  redirects to whichever version is latest, while the version DOI pins the
+  exact deposit this work used.
 - The archive size is stated consistently as ~17 GiB (18 GB) across the eight
   files of the four published recordings, computed from the byte counts in
   `raw.yaml`. Earlier documentation said ~16 GiB in two places and ~20 GiB in

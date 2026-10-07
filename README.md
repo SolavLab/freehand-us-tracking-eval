@@ -129,7 +129,8 @@ The software, if you use it directly — see [`CITATION.cff`](CITATION.cff) for
 machine-readable metadata:
 
 > Z. Oddes and D. Solav, *vipose: visual–inertial pose tracking evaluation*,
-> version 1.1.0. https://github.com/SolavLab/freehand-us-tracking-eval
+> version 1.1.0, Zenodo, 2026.
+> [10.5281/zenodo.23213919](https://doi.org/10.5281/zenodo.23213919)
 
 The raw recordings, published separately under CC-BY-4.0:
 
