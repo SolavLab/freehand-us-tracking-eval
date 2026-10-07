@@ -16,7 +16,7 @@ checking how thoroughly the manuscript's numbers were reproduced.
 | **R3c** | Pipeline-II and -III poses, via cuVSLAM | `isaac-ros` container | hours |
 
 **R1 and R2 are what the manuscript's claims rest on, and they need nothing
-but the `vipose` install.** R3 needs the ~20 GiB raw archive (catalogued in
+but the `vipose` install.** R3 needs the ~17 GiB raw archive (catalogued in
 `datasets/probe-tracking-2025-10-23/raw.yaml`; too large for this repository,
 published as a separate Zenodo deposit, DOI 10.5281/zenodo.22690904) and
 vendor SDKs, and is not

@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the paper it accompanies."
+title: "vipose: visual-inertial pose tracking evaluation"
+abstract: >-
+  Evaluation of visual-inertial pose-tracking pipelines against a
+  motion-capture reference, for freehand 3D-ultrasound probe localization.
+  Synchronizes the two clocks, solves the robot-world/hand-eye calibration,
+  and reports per-frame translational and rotational residuals with
+  block-bootstrap confidence intervals.
+type: software
+version: 1.1.0
+license: MIT
+repository-code: "https://github.com/SolavLab/freehand-us-tracking-eval"
+authors:
+  - family-names: Oddes
+    given-names: Zohar
+    orcid: "https://orcid.org/0000-0002-0548-7300"
+    affiliation: "Faculty of Mechanical Engineering, Technion - Israel Institute of Technology"
+  - family-names: Solav
+    given-names: Dana
+    orcid: "https://orcid.org/0000-0003-3215-0401"
+    affiliation: "Faculty of Mechanical Engineering, Technion - Israel Institute of Technology"
+keywords:
+  - freehand 3D ultrasound
+  - hand-eye calibration
+  - motion capture
+  - probe tracking
+  - SLAM
+  - visual-inertial odometry
+references:
+  - type: article
+    title: >-
+      Accuracy of inside-out visual-inertial tracking pipelines for freehand
+      3D ultrasound probe localization
+    authors:
+      - family-names: Oddes
+        given-names: Zohar
+      - family-names: Solav
+        given-names: Dana
+  - type: data
+    title: >-
+      Freehand 3D ultrasound probe tracking - raw sensor recordings
+      (ZED SVO2 + RealSense bag)
+    doi: "10.5281/zenodo.22690904"
+    authors:
+      - family-names: Oddes
+        given-names: Zohar
+      - family-names: Solav
+        given-names: Dana

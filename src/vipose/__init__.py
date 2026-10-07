@@ -13,7 +13,7 @@ Nothing in this package imports matplotlib.pyplot. Figures live in
 results have been written to disk.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from .calibration import HandEyeResult, MarkerFrame, marker_frame, solve_hand_eye
 from .conditioning import shah_margin, shah_singular_values

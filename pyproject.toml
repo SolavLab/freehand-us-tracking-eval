@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vipose"
-version = "1.0.0"
+version = "1.1.0"
 description = "Evaluation of visual-inertial pose-tracking pipelines against a motion-capture reference, for freehand 3D-ultrasound probe localization"
 readme = "README.md"
 requires-python = ">=3.10,<3.11"
@@ -48,7 +48,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 vipose = "vipose.cli:main"
 
 [project.urls]
-Repository = "https://github.com/ZoharOddes/us-tracking-release"
+Repository = "https://github.com/SolavLab/freehand-us-tracking-eval"
 
 [tool.setuptools.packages.find]
 where = ["src"]

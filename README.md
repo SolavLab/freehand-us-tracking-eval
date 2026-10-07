@@ -14,6 +14,16 @@ eleven-camera Vicon reference, for the paper this repository accompanies:
 > Z. Oddes and D. Solav, *Accuracy of inside-out visual–inertial tracking
 > pipelines for freehand 3D ultrasound probe localization*.
 
+`vipose` re-implements the analysis behind that paper as a library. It is not
+a reconstruction from the published figures: the original run's per-frame
+residuals are kept under `tests/golden/`, and the test suite checks every cell
+against them elementwise. All twelve reproduce with a maximum per-frame
+difference of `0.000e+00`, and the re-implementation agrees with the original
+to 1.4e-08 mm and 2.5e-09 degrees — the remaining difference being one
+optimizer tolerance in the offset search, exact to 1e-12 once the offset is
+pinned. [`docs/reproduction/`](docs/reproduction/README.md) documents how that
+comparison was made and what it does and does not establish.
+
 | Pipeline | Camera | Platform | Localization |
 |---|---|---|---|
 | `zed-sdk` | ZED X Mini | Jetson Orin NX | ZED SDK 5.3.0 positional tracking |
@@ -55,7 +65,7 @@ datasets/probe-tracking-2025-10-23/   the shipped example: 16 input files, 15 Mi
   tracking/<pipeline>/<recording>/    per-pipeline pose CSVs
   dataset.yaml                        the manifest: ids, hashes, provenance
   schema/poses.schema.json            the pose-CSV contract
-  raw.yaml                            catalogue of the ~20 GiB raw archive (too large for GitHub; on Zenodo, DOI 10.5281/zenodo.22690904)
+  raw.yaml                            catalogue of the ~17 GiB raw archive (too large for GitHub; on Zenodo, DOI 10.5281/zenodo.22690904)
 src/vipose/                           the library and CLI
 extract/                              acquisition-side code: raw recordings -> pose CSVs
 environments/isaac_ros/               pinned upstream + patches for cuVSLAM
@@ -110,5 +120,19 @@ you build on this.
 
 ## Citation
 
+The paper this repository accompanies:
+
 > Z. Oddes and D. Solav, *Accuracy of inside-out visual–inertial tracking
 > pipelines for freehand 3D ultrasound probe localization*.
+
+The software, if you use it directly — see [`CITATION.cff`](CITATION.cff) for
+machine-readable metadata:
+
+> Z. Oddes and D. Solav, *vipose: visual–inertial pose tracking evaluation*,
+> version 1.1.0. https://github.com/SolavLab/freehand-us-tracking-eval
+
+The raw recordings, published separately under CC-BY-4.0:
+
+> Z. Oddes and D. Solav, *Freehand 3D ultrasound probe tracking — raw sensor
+> recordings (ZED SVO2 + RealSense bag)*, Zenodo, 2026.
+> [10.5281/zenodo.22690904](https://doi.org/10.5281/zenodo.22690904)

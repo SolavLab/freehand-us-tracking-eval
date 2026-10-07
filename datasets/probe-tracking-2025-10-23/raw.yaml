@@ -1,8 +1,8 @@
 # Raw recordings — NOT shipped in this repository.
 #
 # These are the source recordings from which everything under tracking/ was
-# derived.  They total ~16 GiB for the four published recordings and belong
-# in an archival deposit, not in git.
+# derived.  They total ~17 GiB (18 GB) across the eight files of the four
+# published recordings, and belong in an archival deposit, not in git.
 #
 # Only the extraction stage (extract/) reads them.  The evaluation package never
 # needs them: every table and figure in the paper is reproducible from the CSVs
@@ -10,8 +10,9 @@
 # point at a directory laid out as <root>/<recording>/<file>.
 
 root_env: VIPOSE_RAW_ROOT
-doi: 10.5281/zenodo.22690904   # published
-sha256: pending          # to be filled in when the archive is deposited
+doi: 10.5281/zenodo.22690904   # published, CC-BY-4.0
+# Per-file checksums are published with the Zenodo record; the byte counts
+# below are the local cross-check.
 recordings:
   pivot:
     legacy_test: 2
