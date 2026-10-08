@@ -10,7 +10,10 @@
 # point at a directory laid out as <root>/<recording>/<file>.
 
 root_env: VIPOSE_RAW_ROOT
-doi: 10.5281/zenodo.22690904   # published, CC-BY-4.0
+# Version DOI: it pins the exact deposit this work used.  The concept DOI
+# 10.5281/zenodo.22690903 also resolves, but redirects to whichever version
+# is latest, so it is deliberately not the one recorded here.
+doi: 10.5281/zenodo.22690904   # version DOI, published, CC-BY-4.0
 # Per-file checksums are published with the Zenodo record; the byte counts
 # below are the local cross-check.
 recordings:
